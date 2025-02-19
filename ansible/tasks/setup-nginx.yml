@@ -1,82 +1,251 @@
-- name: nginx - system user
-  user: name=nginx
+# First create nginx group and user
+- name: Nginx - create group
+  group:
+    name: nginx
+    state: present
+    system: yes
+  when: stage2_nix
 
-# Kong installation steps from http://archive.vn/3HRQx
-- name: nginx - system dependencies
+- name: Nginx - system user
+  user:
+    name: nginx
+    system: yes
+    group: nginx
+    shell: /bin/false
+    create_home: no
+  when: stage2_nix
+
+- name: Verify nginx user setup
+  block:
+    - name: Check nginx user and group existence
+      shell: |
+        echo "=== Nginx User/Group Verification ==="
+        id nginx || echo "User nginx not found"
+        getent group nginx || echo "Group nginx not found"
+      register: nginx_verify
+      changed_when: false
+
+    - name: Display verification results
+      debug:
+        var: nginx_verify.stdout_lines
+  when: stage2_nix
+
+# Installation steps
+- name: Nginx - system dependencies
   apt:
     pkg:
       - openssl
       - libpcre3-dev
       - libssl-dev
       - zlib1g-dev
+    state: present
+  when: stage2_nix
 
-- name: nginx - download source
+- name: Nginx - download source
   get_url:
     url: "https://nginx.org/download/nginx-{{ nginx_release }}.tar.gz"
     dest: /tmp/nginx-{{ nginx_release }}.tar.gz
     checksum: "{{ nginx_release_checksum }}"
+  when: stage2_nix
 
-- name: nginx - unpack archive
+- name: Nginx - unpack archive
   unarchive:
     remote_src: yes
     src: /tmp/nginx-{{ nginx_release }}.tar.gz
     dest: /tmp
+  when: stage2_nix
 
-- name: nginx - configure
+- name: Nginx - configure
   shell:
     chdir: /tmp/nginx-{{ nginx_release }}
     cmd: |
       set -e
-
       ./configure \
       --prefix=/usr/local/nginx \
       --conf-path=/etc/nginx/nginx.conf \
       --with-http_ssl_module \
       --with-http_realip_module \
-      --with-threads
+      --with-threads \
+      --user=nginx \
+      --group=nginx
   become: yes
+  when: stage2_nix
 
-- name: nginx - build
+- name: Nginx - build
   community.general.make:
     target: build
     chdir: /tmp/nginx-{{ nginx_release }}
     jobs: "{{ parallel_jobs | default(omit) }}"
   become: yes
+  when: stage2_nix
 
-- name: nginx - install
+- name: Nginx - install
   make:
     chdir: /tmp/nginx-{{ nginx_release }}
     target: install
   become: yes
+  when: stage2_nix
 
-- name: nginx - hand over ownership of /usr/local/nginx to user nginx
+- name: Create required nginx directories
   file:
-    path: /usr/local/nginx
-    recurse: yes
+    path: "{{ item }}"
+    state: directory
     owner: nginx
+    group: nginx
+    mode: '0755'
+  loop:
+    - /usr/local/nginx
+    - /etc/nginx
+    - /var/log/nginx
+    - /var/cache/nginx
+  when: stage2_nix
 
-- name: nginx - hand over ownership of /etc/nginx to user nginx
-  file:
-    path: /etc/nginx
-    recurse: yes
-    owner: nginx
+- name: Nginx - set ownership and permissions
+  block:
+    - name: Set ownership of nginx directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: nginx
+        group: nginx
+        mode: '0755'
+        recurse: yes
+      loop:
+        - /usr/local/nginx
+        - /etc/nginx
 
-# [warn] ulimit is currently set to "1024". For better performance set it to at least
-# "4096" using "ulimit -n"
-- name: nginx - bump up ulimit
+    - name: Verify permissions
+      shell: |
+        echo "=== Nginx Permissions Check ==="
+        ls -la /usr/local/nginx
+        ls -la /etc/nginx
+      register: perm_check
+      changed_when: false
+
+    - name: Show permissions check
+      debug:
+        var: perm_check.stdout_lines
+  when: stage2_nix
+
+- name: Nginx - bump up ulimit
   pam_limits:
     limit_item: nofile
     limit_type: soft
     domain: nginx
     value: "4096"
+  when: stage2_nix
 
-- name: nginx - create service file
+- name: Nginx - create service file
   template:
     src: files/nginx.service.j2
     dest: /etc/systemd/system/nginx.service
+    owner: root
+    group: root
+    mode: '0644'
+  when: stage2_nix
 
-# Keep it dormant for the timebeing
+- name: Nginx - reload systemd
+  systemd:
+    daemon_reload: yes
+  when: stage2_nix
 
-# - name: nginx - reload systemd
-#   systemd:
-#     daemon_reload: yes
+- name: Final nginx verification
+  block:
+    - name: Verify nginx setup
+      shell: |
+        echo "=== Final Nginx Verification ==="
+        id nginx
+        getent group nginx
+        ls -la /usr/local/nginx
+        ls -la /etc/nginx
+        test -f /etc/systemd/system/nginx.service || echo "Service file missing"
+      register: final_verify
+      changed_when: false
+
+    - name: Show final verification
+      debug:
+        var: final_verify.stdout_lines
+  when: stage2_nix
+
+# - name: nginx - system user
+#   user: name=nginx
+
+# # Kong installation steps from http://archive.vn/3HRQx
+# - name: nginx - system dependencies
+#   apt:
+#     pkg:
+#       - openssl
+#       - libpcre3-dev
+#       - libssl-dev
+#       - zlib1g-dev
+
+# - name: nginx - download source
+#   get_url:
+#     url: "https://nginx.org/download/nginx-{{ nginx_release }}.tar.gz"
+#     dest: /tmp/nginx-{{ nginx_release }}.tar.gz
+#     checksum: "{{ nginx_release_checksum }}"
+
+# - name: nginx - unpack archive
+#   unarchive:
+#     remote_src: yes
+#     src: /tmp/nginx-{{ nginx_release }}.tar.gz
+#     dest: /tmp
+
+# - name: nginx - configure
+#   shell:
+#     chdir: /tmp/nginx-{{ nginx_release }}
+#     cmd: |
+#       set -e
+
+#       ./configure \
+#       --prefix=/usr/local/nginx \
+#       --conf-path=/etc/nginx/nginx.conf \
+#       --with-http_ssl_module \
+#       --with-http_realip_module \
+#       --with-threads
+#   become: yes
+
+# - name: nginx - build
+#   community.general.make:
+#     target: build
+#     chdir: /tmp/nginx-{{ nginx_release }}
+#     jobs: "{{ parallel_jobs | default(omit) }}"
+#   become: yes
+
+# - name: nginx - install
+#   make:
+#     chdir: /tmp/nginx-{{ nginx_release }}
+#     target: install
+#   become: yes
+
+# - name: nginx - hand over ownership of /usr/local/nginx to user nginx
+#   file:
+#     path: /usr/local/nginx
+#     recurse: yes
+#     owner: nginx
+
+# - name: nginx - hand over ownership of /etc/nginx to user nginx
+#   file:
+#     path: /etc/nginx
+#     recurse: yes
+#     owner: nginx
+
+# # [warn] ulimit is currently set to "1024". For better performance set it to at least
+# # "4096" using "ulimit -n"
+# - name: nginx - bump up ulimit
+#   pam_limits:
+#     limit_item: nofile
+#     limit_type: soft
+#     domain: nginx
+#     value: "4096"
+
+# - name: nginx - create service file
+#   template:
+#     src: files/nginx.service.j2
+#     dest: /etc/systemd/system/nginx.service
+
+# # Keep it dormant for the timebeing
+
+# # - name: nginx - reload systemd
+# #   systemd:
+# #     daemon_reload: yes

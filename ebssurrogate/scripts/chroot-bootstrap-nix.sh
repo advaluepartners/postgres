@@ -184,6 +184,11 @@ function create_admin_account {
 	groupadd admin
 }
 
+# Ensure pgbouncer user and group exist
+if ! id pgbouncer >/dev/null 2>&1; then
+    adduser --system --no-create-home --group pgbouncer
+fi
+
 #Set default target as multi-user
 function set_default_target {
 	rm -f /etc/systemd/system/default.target

@@ -57,11 +57,102 @@
       when: is_psql_oriole and stage2_nix
       become: yes
 
-- name: Install Postgres from nix binary cache
+- name: Ensure /tmp/ansible-playbook is writable by postgres
+  become: yes
+  file:
+    path: /tmp/ansible-playbook
+    owner: postgres
+    group: postgres
+    mode: '0755'
+    recurse: yes
+  when: stage2_nix
+
+- name: Debug supabase-groonga.nix contents
   become: yes
   shell: |
-    sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile install github:supabase/postgres/{{ git_commit_sha }}#{{psql_version}}/bin"
+    cat /tmp/ansible-playbook/nix/supabase-groonga.nix || echo "File not found"
+    ls -l /tmp/ansible-playbook/nix/
+    sha256sum /tmp/ansible-playbook/nix/supabase-groonga.nix || echo "Checksum failed"
   when: stage2_nix
+  register: groonga_debug
+- debug:
+    var: groonga_debug.stdout_lines
+  when: stage2_nix
+
+- name: Install Postgres from local flake
+  become: yes
+  shell: |
+    sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile install /tmp/ansible-playbook#postgresql_15"
+  when: stage2_nix
+  register: install_postgres
+  retries: 3
+  delay: 5
+  until: install_postgres.rc == 0
+
+- name: Debug Nix profile contents
+  become: yes
+  shell: |
+    sudo -u postgres bash -c "ls -l /var/lib/postgresql/.nix-profile"
+    sudo -u postgres bash -c "ls -l /var/lib/postgresql/.nix-profile/lib || true"
+    sudo -u postgres bash -c "ls -l /var/lib/postgresql/.nix-profile/include || true"
+  when: stage2_nix
+  register: nix_profile_debug
+- debug:
+    var: nix_profile_debug.stdout_lines
+  when: stage2_nix
+
+- name: Ensure PostgreSQL include subdirectories exist
+  file:
+    path: /usr/lib/postgresql/include/server
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: '0755'
+  when: stage2_nix
+
+- name: Remove existing PostgreSQL include directory (ARM64 fix)
+  file:
+    path: /usr/lib/postgresql/include
+    state: absent
+  when: ansible_architecture == 'aarch64' and stage2_nix
+  become: yes
+
+- name: Debug contents of /var/lib/postgresql/.nix-profile/lib
+  shell: ls -l /var/lib/postgresql/.nix-profile/lib
+  register: lib_contents
+  become: yes
+  when: stage2_nix
+
+- name: Show lib contents
+  debug:
+    var: lib_contents.stdout_lines
+  when: stage2_nix
+
+- name: Create PostgreSQL symlinks for Nix profile
+  file:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    state: link
+    owner: postgres
+    group: postgres
+    mode: '0755'
+  with_items:
+    - { src: "/var/lib/postgresql/.nix-profile/lib", dest: "/usr/lib/postgresql/lib" }
+    - { src: "/var/lib/postgresql/.nix-profile/include", dest: "/usr/lib/postgresql/include" }
+  become: yes
+  when: stage2_nix
+
+- name: Create symlinks for PostgreSQL headers
+  file:
+    src: "{{ item }}"
+    dest: "/usr/lib/postgresql/include/server/{{ item | basename }}"
+    state: link
+  with_fileglob:
+    - "/var/lib/postgresql/.nix-profile/include/*.h"
+  become: yes
+  when:
+    - stage2_nix
+    - ansible_architecture != 'aarch64'
 
 - name: Install pg_prove from nix binary cache
   become: yes
@@ -72,7 +163,55 @@
 - name: Install supabase-groonga from nix binary cache
   become: yes
   shell: |
-    sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile install github:supabase/postgres/{{ git_commit_sha }}#supabase-groonga"
+    sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile install github:supabase/postgres/{{ git_commit_sha }}#supabase_groonga"
+  when: stage2_nix and ansible_architecture != 'aarch64'
+
+- name: Skip supabase-groonga on ARM
+  debug:
+    msg: "Skipping supabase-groonga installation on ARM architecture"
+  when: stage2_nix and ansible_architecture == 'aarch64'
+
+- name: Configure ARM-specific settings
+  set_fact:
+    platform_specific_paths:
+      lib_dir: "/lib/aarch64-linux-gnu"
+      include_dir: "/usr/include/aarch64-linux-gnu"
+  when: ansible_architecture == 'arm64'
+
+# - name: Set up PostgreSQL directories for ARM64
+#   file:
+#     path: "{{ item }}"
+#     state: directory
+#     owner: postgres
+#     group: postgres
+#     mode: '0755'
+#   with_items:
+#     - "/usr/lib/postgresql/bin"
+#     - "/usr/lib/postgresql/lib"
+#     - "/usr/lib/postgresql/include"
+#     - "/usr/lib/postgresql/share"
+#   when: stage2_nix
+
+# - name: Ensure required PostgreSQL directories exist
+#   file:
+#     path: "{{ item }}"
+#     state: directory
+#     owner: postgres
+#     group: postgres
+#     mode: '0755'
+#   with_items:
+#     - "/usr/lib/postgresql/bin"
+#     - "/usr/lib/postgresql/share"
+#   when: stage2_nix
+
+- name: Create ARM64 specific symlinks
+  file:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    state: link
+  with_items:
+    - { src: "/var/lib/postgresql/.nix-profile/lib/aarch64-linux-gnu", dest: "/usr/lib/postgresql/lib" }
+    - { src: "/var/lib/postgresql/.nix-profile/include", dest: "/usr/lib/postgresql/include" }
   when: stage2_nix
 
 - name: Install debug symbols for postgres version

@@ -1,0 +1,21 @@
+2025/02/18 03:19:20 [INFO] Packer version: 1.12.0 [go1.22.9 darwin arm64]
+2025/02/18 03:19:20 [INFO] PACKER_CONFIG env var not set; checking the default config file path
+2025/02/18 03:19:20 [INFO] PACKER_CONFIG env var set; attempting to open config file: /Users/barneycook/.packerconfig
+2025/02/18 03:19:20 [WARN] Config file doesn't exist: /Users/barneycook/.packerconfig
+2025/02/18 03:19:20 [INFO] Setting cache directory: /Users/barneycook/.cache/packer
+
+  on ./stage2-nix-psql.pkr.hcl line 41, in variables:
+  41:   git_commit_sha {
+
+Blocks are not allowed here.
+
+2025/02/18 03:19:20 [INFO] (telemetry) Finalizing.
+Error: Unexpected "git_commit_sha" block
+
+  on ./stage2-nix-psql.pkr.hcl line 41, in variables:
+  41:   git_commit_sha {
+
+Blocks are not allowed here.
+
+
+2025/02/18 03:19:20 waiting for all plugin processes to complete...

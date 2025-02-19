@@ -1,3 +1,16 @@
+- name: Debug - PostgreSQL pre-setup
+  shell: |
+    echo "=== System State ==="
+    echo "Groups:"
+    getent group postgres ssl-cert || echo "Groups not found"
+    echo "====="
+  register: pre_postgres_debug
+  changed_when: false
+
+- name: Show PostgreSQL pre-setup debug
+  debug:
+    var: pre_postgres_debug.stdout_lines
+
 - name: Postgres - copy package
   copy:
     src: files/postgres/
@@ -64,32 +77,160 @@
     cmd: ln -s /usr/lib/postgresql/{{ postgresql_major }}/bin /usr/lib/postgresql/bin
   when: debpkg_mode
 
+- name: Ensure PostgreSQL include/server directory exists
+  file:
+    path: /usr/lib/postgresql/include/server
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: '0755'
+  when: stage2_nix
+
+- name: Install PostgreSQL development files from local flake
+  become: yes
+  shell: |
+    sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && \
+      nix profile install /tmp/ansible-playbook#psql_15.exts && \
+      nix profile install /tmp/ansible-playbook#psql_15.exts.supautils"
+  when: stage2_nix
+  register: install_exts
+  retries: 3
+  delay: 5
+  until: install_exts.rc == 0
+
+- name: Ensure PostgreSQL include directories exist
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: '0755'
+  with_items:
+    - /usr/lib/postgresql/include
+    - /usr/lib/postgresql/include/server
+  when: stage2_nix
+
+- name: Create symlink for PostgreSQL include directory
+  file:
+    src: "/var/lib/postgresql/.nix-profile/include"
+    dest: "/usr/lib/postgresql/include"
+    state: link
+    owner: postgres
+    group: postgres
+    mode: '0755'
+  become: yes
+  when: stage2_nix
+
+# - name: Ensure PostgreSQL include directories exist
+#   file:
+#     path: "{{ item }}"
+#     state: directory
+#     owner: postgres
+#     group: postgres
+#     mode: '0755'
+#   with_items:
+#     - /usr/lib/postgresql/include
+#     - /usr/lib/postgresql/include/server
+#   when: stage2_nix
+
+# - name: Create symlinks for PostgreSQL headers
+#   shell: |
+#     ln -sf /var/lib/postgresql/.nix-profile/include/* /usr/lib/postgresql/include/server/
+#   become: yes
+#   when: stage2_nix
+
+# - name: Create symbolic links for PostgreSQL header files
+#   file:
+#     src: "{{ item }}"
+#     dest: "/usr/lib/postgresql/include/server/{{ item | basename }}"
+#     state: link
+#   with_fileglob:
+#     - "/var/lib/postgresql/.nix-profile/include/*.h"
+#   become: yes
+#   when: stage2_nix
+
+
+# - name: create ssl-cert group
+#   group:
+#     name: ssl-cert
+#     state: present
+#   when: nixpkg_mode
+
+# - name: create postgres group
+#   group:
+#     name: postgres
+#     state: present
+#   when: nixpkg_mode
+
+# - name: create postgres user
+#   shell: adduser --system  --home /var/lib/postgresql --no-create-home --shell /bin/bash --group --gecos "PostgreSQL administrator" postgres
+#   args:
+#     executable: /bin/bash
+#   become: yes
+#   when: nixpkg_mode
+
+# - name: add postgres user to postgres group
+#   shell: usermod -a -G ssl-cert postgres
+#   args:
+#     executable: /bin/bash
+#   become: yes
+#   when: nixpkg_mode
+
 - name: create ssl-cert group
   group:
     name: ssl-cert
     state: present
+    gid: 1001
   when: nixpkg_mode
-# the old method of installing from debian creates this group, but we must create it explicitly
-# for the nix built version
 
 - name: create postgres group
   group:
     name: postgres
     state: present
+    gid: 1002
   when: nixpkg_mode
 
-- name: create postgres user
-  shell: adduser --system  --home /var/lib/postgresql --no-create-home --shell /bin/bash --group --gecos "PostgreSQL administrator" postgres
-  args:
-    executable: /bin/bash
-  become: yes
+- name: Create postgres user and set primary group
+  user:
+    name: postgres
+    system: yes
+    home: /var/lib/postgresql
+    shell: /bin/bash
+    group: postgres
+    groups: []
   when: nixpkg_mode
 
-- name: add postgres user to postgres group
-  shell: usermod -a -G ssl-cert postgres
-  args:
-    executable: /bin/bash
-  become: yes
+- name: Add postgres to additional groups
+  user:
+    name: postgres
+    group: postgres
+    groups: ssl-cert
+    append: yes
+  when: nixpkg_mode
+
+- name: Verify postgres user groups
+  shell: |
+    echo "=== Verifying postgres user groups ==="
+    id postgres
+    echo "Group memberships:"
+    getent group postgres
+    getent group ssl-cert
+  register: verify_postgres
+  changed_when: false
+  when: nixpkg_mode
+
+- name: Show verification results
+  debug:
+    var: verify_postgres.stdout_lines
+  when: nixpkg_mode
+
+- name: Force system to recognize group changes
+  shell: |
+    # Reload system group cache
+    systemctl daemon-reload
+    # Force group membership update
+    pkill -SIGHUP -u postgres || true
+  changed_when: false
   when: nixpkg_mode
 
 - name: Create relevant directories
@@ -260,18 +401,45 @@
     dest: /etc/systemd/system/database-optimizations.service
   when: debpkg_mode or stage2_nix
 
+- name: Ensure /run/postgresql exists for lock file creation
+  become: yes
+  file:
+    path: /run/postgresql
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: '2775'
+  when: stage2_nix
+
+- name: Check if PostgreSQL PID file exists
+  stat:
+    path: /var/lib/postgresql/data/postmaster.pid
+  register: pg_pid_file
+  when: stage2_nix
+
+- name: Stop Postgres Database without Systemd (force shutdown)
+  become: yes
+  become_user: postgres
+  shell: /usr/lib/postgresql/bin/pg_ctl -D /var/lib/postgresql/data stop -m immediate
+  args:
+    executable: /bin/bash
+  when: stage2_nix and pg_pid_file.stat.exists
+
 - name: Restart Postgres Database without Systemd
   become: yes
   become_user: postgres
-  shell: |
-    source /var/lib/postgresql/.bashrc
+  ansible.builtin.shell: |
+    # Export environment variables inline
+    export LANG=en_US.UTF-8
+    export LANGUAGE=en_US:en
+    export LC_ALL=en_US.UTF-8
+    export LC_CTYPE=en_US.UTF-8
+    export LOCALE_ARCHIVE=/usr/lib/locale/locale-archive
+    # Use the POSIX “.” operator instead of “source”
+    . /var/lib/postgresql/.bashrc
     /usr/lib/postgresql/bin/pg_ctl -D /var/lib/postgresql/data start
-  environment:
-    LANG: en_US.UTF-8
-    LANGUAGE: en_US.UTF-8
-    LC_ALL: en_US.UTF-8
-    LC_CTYPE: en_US.UTF-8
-    LOCALE_ARCHIVE: /usr/lib/locale/locale-archive
+  args:
+    executable: /bin/bash
   when: stage2_nix
 
 
@@ -311,3 +479,11 @@
     - 'export LC_CTYPE="en_US.UTF-8"'
   become: yes
   when: nixpkg_mode
+
+- name: Ensure pg_config symlink points to nix installation
+  file:
+    src: "/var/lib/postgresql/.nix-profile/bin/pg_config"
+    dest: "/usr/bin/pg_config"
+    state: link
+    force: yes
+  when: stage2_nix

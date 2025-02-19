@@ -1,0 +1,88 @@
+# First create vector group and user
+- name: Vector - create group
+  group:
+    name: vector
+    state: present
+    system: yes
+  when: stage2_nix
+
+- name: Vector - system user
+  user:
+    name: vector
+    system: yes
+    group: vector
+    shell: /bin/false
+    create_home: no
+  when: stage2_nix
+
+- name: Add vector to required groups
+  user:
+    name: vector
+    groups: vector,adm,systemd-journal,postgres
+    append: yes
+  when: stage2_nix
+
+- name: Vector - install dependencies
+  apt:
+    pkg:
+      - curl
+      - ca-certificates
+    state: present
+  when: stage2_nix
+
+- name: Vector - download deb package
+  get_url:
+    url: "{{ vector_arm_deb if platform == 'arm64' else vector_x86_deb }}"
+    dest: /tmp/vector.deb
+  when: stage2_nix
+
+- name: Vector - install package
+  apt:
+    deb: /tmp/vector.deb
+  when: stage2_nix
+
+- name: Create vector directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: vector
+    group: vector
+    mode: '0755'
+  loop:
+    - /etc/vector
+    - /var/lib/vector
+    - /var/log/vector
+  when: stage2_nix
+
+- name: Verify vector setup
+  block:
+    - name: Check vector installation
+      shell: |
+        echo "=== Vector Installation Verification ==="
+        id vector
+        echo "Group memberships:"
+        for group in vector adm systemd-journal postgres; do
+          echo "Checking $group:"
+          getent group $group | grep vector || echo "Not in $group"
+        done
+        which vector || echo "Vector binary not found"
+        ls -la /etc/vector
+      register: verify_result
+      changed_when: false
+
+    - name: Show verification results
+      debug:
+        var: verify_result.stdout_lines
+  when: stage2_nix
+
+- name: Vector - create service file
+  template:
+    src: files/vector.service.j2
+    dest: /etc/systemd/system/vector.service
+    mode: '0644'
+  when: stage2_nix
+
+- name: Vector - reload systemd
+  systemd:
+    daemon_reload: yes
+  when: stage2_nix

@@ -26,7 +26,7 @@ function install_nix() {
 
 function execute_stage2_playbook {
     echo "POSTGRES_MAJOR_VERSION: ${POSTGRES_MAJOR_VERSION}"
-    echo "GIT_SHA: ${GIT_SHA}"
+    echo "GIT_SHA: ${GIT_SHA} (using local flake)"
     sudo tee /etc/ansible/ansible.cfg <<EOF
 [defaults]
 callbacks_enabled = timer, profile_tasks, profile_roles

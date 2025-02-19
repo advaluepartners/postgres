@@ -1,0 +1,7 @@
+Error: Undefined -var variable
+
+A "postgres_major" variable was passed in the command line but was not found in
+known variables. To declare variable "postgres_major", place this block in one
+of your .pkr files, such as variables.pkr.hcl
+
+

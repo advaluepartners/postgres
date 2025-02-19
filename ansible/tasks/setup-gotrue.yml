@@ -1,11 +1,26 @@
+# Group creation first
+- name: Gotrue - create group
+  group:
+    name: gotrue
+    state: present
+    system: yes
+  when: stage2_nix
+
+# Then user creation with proper group
+- name: Gotrue - system user
+  user:
+    name: gotrue
+    system: yes
+    group: gotrue
+    shell: /bin/false
+    create_home: no
+  when: stage2_nix
+
 - name: UFW - Allow connections to GoTrue metrics exporter
   ufw:
     rule: allow
     port: "9122"
-    
-# use this user for the Gotrue build and for running the service
-- name: Gotrue - system user
-  user: name=gotrue
+  when: stage2_nix
 
 - name: Setting arch (x86)
   set_fact:
@@ -22,13 +37,16 @@
     url: "https://github.com/supabase/gotrue/releases/download/v{{ gotrue_release }}/auth-v{{ gotrue_release }}-{{ arch }}.tar.gz"
     dest: /tmp/gotrue.tar.gz
     checksum: "{{ gotrue_release_checksum }}"
+  when: stage2_nix
 
 - name: gotrue - create /opt/gotrue
   file:
     path: /opt/gotrue
     state: directory
     owner: gotrue
+    group: gotrue
     mode: 0775
+  when: stage2_nix
 
 - name: gotrue - unpack archive in /opt/gotrue
   unarchive:
@@ -36,24 +54,38 @@
     src: /tmp/gotrue.tar.gz
     dest: /opt/gotrue
     owner: gotrue
+    group: gotrue
+  when: stage2_nix
 
-# libpq is a C library that enables user programs to communicate with
-# the PostgreSQL database server.
-# - name: gotrue - system dependencies
-#   apt:
-#     pkg:
-#       - libpq-dev
+- name: Verify gotrue user and group setup
+  block:
+    - name: Check gotrue user and group existence
+      shell: |
+        echo "=== GoTrue User/Group Verification ==="
+        id gotrue
+        echo "Group details:"
+        getent group gotrue
+      register: gotrue_verify
+      changed_when: false
+
+    - name: Display verification results
+      debug:
+        var: gotrue_verify.stdout_lines
+  when: stage2_nix
 
 - name: gotrue - create service file
   template:
     src: files/gotrue.service.j2
     dest: /etc/systemd/system/gotrue.service
+  when: stage2_nix
 
 - name: gotrue - create optimizations file
   template:
     src: files/gotrue-optimizations.service.j2
     dest: /etc/systemd/system/gotrue-optimizations.service
+  when: stage2_nix
 
 - name: gotrue - reload systemd
   systemd:
     daemon_reload: yes
+  when: stage2_nix

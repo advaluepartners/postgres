@@ -1,130 +1,347 @@
-# Downloading dependencies
-- name: wal-g dependencies
-  become: yes
+# Dependencies
+- name: Install git and WAL-G dependencies
   apt:
     pkg:
+      - git
       - libbrotli-dev
       - liblzo2-dev
       - libsodium-dev
       - cmake
-
-# install go dependency for WAL-G
-- name: wal-g go dependency
-  get_url:
-    url: "https://golang.org/dl/go{{ golang_version }}.linux-{{ platform }}.tar.gz"
-    dest: /tmp
-    checksum: "{{ golang_version_checksum[platform] }}"
-    timeout: 60
-
-- name: unpack go archive
-  unarchive:
-    remote_src: yes
-    src: "/tmp/go{{ golang_version }}.linux-{{ platform }}.tar.gz"
-    dest: /usr/local
-
-# Download WAL-G
-- name: wal-g - download latest version
-  git:
-    repo: https://github.com/wal-g/wal-g.git
-    dest: /tmp/wal-g
-    version: "v{{ wal_g_release }}"
-  become: yes
-
-- name: wal-g - pg_clean
-  make:
-    chdir: /tmp/wal-g
-    target: pg_clean
-    params:
-      GOBIN: "/usr/local/bin"
-      PATH: "{{ ansible_env.PATH }}:/usr/local/go/bin"
-      USE_LIBSODIUM: true
-  become: yes
-  ignore_errors: yes
-
-- name: wal-g - deps
-  make:
-    chdir: /tmp/wal-g
-    target: deps
-    params:
-      GOBIN: "/usr/local/bin"
-      PATH: "{{ ansible_env.PATH }}:/usr/local/go/bin"
-      USE_LIBSODIUM: true
-  become: yes
-  ignore_errors: yes
-
-- name: wal-g - build and install
-  community.general.make:
-    chdir: /tmp/wal-g
-    target: pg_install
-    jobs: "{{ parallel_jobs | default(omit) }}"
-    params:
-      GOBIN: "/usr/local/bin"
-      PATH: "{{ ansible_env.PATH }}:/usr/local/go/bin"
-      USE_LIBSODIUM: true
-  become: yes
-
-- name: Create wal-g group
-  group:
-    name: wal-g
+      - pkg-config  # Add this
+      - build-essential
+      - libsodium23  # Add this
     state: present
+  when: stage2_nix
 
-- name: Create wal-g user
-  user:
-    name: wal-g
-    shell: /bin/false
-    comment: WAL-G user
-    group: wal-g
-    groups: wal-g, postgres
+# Go installation
+- name: Install Go for WAL-G
+  block:
+    - name: Download Go
+      get_url:
+        url: "https://golang.org/dl/go{{ golang_version }}.linux-{{ platform }}.tar.gz"
+        dest: /tmp
+        checksum: "{{ golang_version_checksum[platform] }}"
+        timeout: 60
 
-- name: Create a config directory owned by wal-g
-  file:
-    path: /etc/wal-g
-    state: directory
-    owner: wal-g
-    group: wal-g
-    mode: '0770'
+    - name: Unpack Go archive
+      unarchive:
+        remote_src: yes
+        src: "/tmp/go{{ golang_version }}.linux-{{ platform }}.tar.gz"
+        dest: /usr/local
+  when: stage2_nix
 
-- name: Create /etc/wal-g/config.json
-  file:
-    path: /etc/wal-g/config.json
-    state: touch
-    owner: wal-g
-    group: wal-g
-    mode: '0664'
+- name: Verify Go installation
+  shell: |
+    export PATH=$PATH:/usr/local/go/bin
+    go version
+  register: go_check
+  failed_when: go_check.rc != 0
+  when: stage2_nix
 
-- name: Move custom wal-g.conf file to /etc/postgresql-custom/wal-g.conf
-  template:
-    src: "files/postgresql_config/custom_walg.conf.j2"
-    dest: /etc/postgresql-custom/wal-g.conf
-    mode: 0664
-    owner: postgres
-    group: postgres
+- name: Show Go version
+  debug:
+    var: go_check.stdout_lines
+  when: stage2_nix
 
-- name: Add script to be run for restore_command
-  template:
-    src: "files/walg_helper_scripts/wal_fetch.sh"
-    dest: /home/postgres/wal_fetch.sh
-    mode: 0500
-    owner: postgres
-    group: postgres
 
-- name: Add helper script for wal_fetch.sh
-  template:
-    src: "files/walg_helper_scripts/wal_change_ownership.sh"
-    dest: /root/wal_change_ownership.sh
-    mode: 0700
-    owner: root
+- name: Build WAL-G
+  block:
+    - name: Clean build directory
+      file:
+        path: /tmp/wal-g
+        state: absent
 
-- name: Include /etc/postgresql-custom/wal-g.conf in postgresql.conf
-  become: yes
+    - name: Clone WAL-G
+      git:
+        repo: https://github.com/wal-g/wal-g.git
+        dest: /tmp/wal-g
+        version: "v{{ wal_g_release }}"
+        depth: 1
+
+    - name: Debug directory structure
+      shell: |
+        echo "=== Directory Structure ==="
+        ls -la /tmp/wal-g
+        echo "=== Main Directory ==="
+        ls -la /tmp/wal-g/main
+        echo "=== CMD Directory ==="
+        ls -la /tmp/wal-g/cmd
+      register: dir_check
+      ignore_errors: yes
+
+    - name: Build WAL-G
+      shell: |
+        cd /tmp/wal-g
+        export PKG_CONFIG_PATH="/usr/lib/pkgconfig"
+        export CGO_ENABLED=1
+        export USE_LIBSODIUM=true
+        export PATH=$PATH:/usr/local/go/bin
+        export GO111MODULE=on
+
+        # Initialize modules
+        go mod init github.com/wal-g/wal-g
+        go mod tidy
+        
+        go build -tags postgresql \
+          -ldflags "-X main.buildDate=`date -u +%Y.%m.%d_%H:%M:%S` -X main.gitRevision=`git rev-parse --short HEAD`" \
+          -o /usr/local/bin/wal-g \
+          ./cmd/pg
+
+      environment:
+        GOBIN: "/usr/local/bin"
+        CGO_ENABLED: "1"
+        USE_LIBSODIUM: "true"
+        GO111MODULE: "on"
+      register: build_result
+
+    - name: Show build output
+      debug:
+        var: build_result
+
+    - name: Verify WAL-G installation
+      shell: |
+        which wal-g || echo "wal-g not found"
+        if [ -f /usr/local/bin/wal-g ]; then
+          echo "wal-g binary exists"
+          ls -l /usr/local/bin/wal-g
+        fi
+      register: verify_result
+      changed_when: false
+
+  when: stage2_nix
+  rescue:
+    - name: Show detailed error information
+      debug:
+        msg: 
+          - "Build failed with following details:"
+          - "Return code: {{ build_result.rc | default('unknown') }}"
+          - "Stdout: {{ build_result.stdout | default('') }}"
+          - "Stderr: {{ build_result.stderr | default('') }}"
+      when: build_result is defined
+
+    - name: Check Go environment
+      shell: |
+        echo "=== Go Environment ==="
+        go env
+        echo "=== Go Version ==="
+        go version
+      register: go_env
+      ignore_errors: yes
+
+    - name: Show Go environment
+      debug:
+        var: go_env
+      when: go_env is defined
+
+    - fail:
+        msg: "WAL-G build failed. See above logs for details."
+
+
+- name: Verify libsodium installation
+  shell: |
+    pkg-config --libs libsodium
+    ldconfig -p | grep libsodium
+  register: libsodium_check
+  changed_when: false
+  when: stage2_nix
+
+- name: Show libsodium status
+  debug:
+    var: libsodium_check.stdout_lines
+  when: stage2_nix
+
+# User and group setup
+- name: WAL-G user and group setup
+  block:
+    - name: Create WAL-G group
+      group:
+        name: wal-g
+        state: present
+        system: yes
+
+    - name: Create WAL-G user
+      user:
+        name: wal-g
+        shell: /bin/false
+        comment: WAL-G user
+        group: wal-g
+        system: yes
+
+    - name: Add WAL-G to postgres group
+      user:
+        name: wal-g
+        groups: postgres
+        append: yes
+
+# Configuration setup
+- name: WAL-G configuration
+  block:
+    - name: Create WAL-G directories
+      file:
+        path: "{{ item.path }}"
+        state: "{{ item.state }}"
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - { path: '/etc/wal-g', state: 'directory', owner: 'wal-g', group: 'wal-g', mode: '0770' }
+        - { path: '/etc/wal-g/config.json', state: 'touch', owner: 'wal-g', group: 'wal-g', mode: '0664' }
+
+    - name: Configure WAL-G
+      template:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        mode: "{{ item.mode }}"
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+      loop:
+        - { src: 'files/postgresql_config/custom_walg.conf.j2', dest: '/etc/postgresql-custom/wal-g.conf', mode: '0664', owner: 'postgres', group: 'postgres' }
+        - { src: 'files/walg_helper_scripts/wal_fetch.sh', dest: '/home/postgres/wal_fetch.sh', mode: '0500', owner: 'postgres', group: 'postgres' }
+        - { src: 'files/walg_helper_scripts/wal_change_ownership.sh', dest: '/root/wal_change_ownership.sh', mode: '0700', owner: 'root', group: 'root' }
+  when: stage2_nix
+
+# Configuration updates
+- name: Update PostgreSQL configuration
   replace:
     path: /etc/postgresql/postgresql.conf
     regexp: "#include = '/etc/postgresql-custom/wal-g.conf'"
     replace: "include = '/etc/postgresql-custom/wal-g.conf'"
+  when: stage2_nix
 
-# Clean up Go
-- name: Uninstall Go
-  become: yes
+# Cleanup
+- name: Cleanup Go installation
   file:
     path: /usr/local/go
     state: absent
+  when: stage2_nix
+
+# # Downloading dependencies
+# - name: wal-g dependencies
+#   become: yes
+#   apt:
+#     pkg:
+#       - libbrotli-dev
+#       - liblzo2-dev
+#       - libsodium-dev
+#       - cmake
+
+# # install go dependency for WAL-G
+# - name: wal-g go dependency
+#   get_url:
+#     url: "https://golang.org/dl/go{{ golang_version }}.linux-{{ platform }}.tar.gz"
+#     dest: /tmp
+#     checksum: "{{ golang_version_checksum[platform] }}"
+#     timeout: 60
+
+# - name: unpack go archive
+#   unarchive:
+#     remote_src: yes
+#     src: "/tmp/go{{ golang_version }}.linux-{{ platform }}.tar.gz"
+#     dest: /usr/local
+
+# # Download WAL-G
+# - name: wal-g - download latest version
+#   git:
+#     repo: https://github.com/wal-g/wal-g.git
+#     dest: /tmp/wal-g
+#     version: "v{{ wal_g_release }}"
+#   become: yes
+
+# - name: wal-g - pg_clean
+#   make:
+#     chdir: /tmp/wal-g
+#     target: pg_clean
+#     params:
+#       GOBIN: "/usr/local/bin"
+#       PATH: "{{ ansible_env.PATH }}:/usr/local/go/bin"
+#       USE_LIBSODIUM: true
+#   become: yes
+#   ignore_errors: yes
+
+# - name: wal-g - deps
+#   make:
+#     chdir: /tmp/wal-g
+#     target: deps
+#     params:
+#       GOBIN: "/usr/local/bin"
+#       PATH: "{{ ansible_env.PATH }}:/usr/local/go/bin"
+#       USE_LIBSODIUM: true
+#   become: yes
+#   ignore_errors: yes
+
+# - name: wal-g - build and install
+#   community.general.make:
+#     chdir: /tmp/wal-g
+#     target: pg_install
+#     jobs: "{{ parallel_jobs | default(omit) }}"
+#     params:
+#       GOBIN: "/usr/local/bin"
+#       PATH: "{{ ansible_env.PATH }}:/usr/local/go/bin"
+#       USE_LIBSODIUM: true
+#   become: yes
+
+# - name: Create wal-g group
+#   group:
+#     name: wal-g
+#     state: present
+
+# - name: Create wal-g user
+#   user:
+#     name: wal-g
+#     shell: /bin/false
+#     comment: WAL-G user
+#     group: wal-g
+#     groups: wal-g, postgres
+
+# - name: Create a config directory owned by wal-g
+#   file:
+#     path: /etc/wal-g
+#     state: directory
+#     owner: wal-g
+#     group: wal-g
+#     mode: '0770'
+
+# - name: Create /etc/wal-g/config.json
+#   file:
+#     path: /etc/wal-g/config.json
+#     state: touch
+#     owner: wal-g
+#     group: wal-g
+#     mode: '0664'
+
+# - name: Move custom wal-g.conf file to /etc/postgresql-custom/wal-g.conf
+#   template:
+#     src: "files/postgresql_config/custom_walg.conf.j2"
+#     dest: /etc/postgresql-custom/wal-g.conf
+#     mode: 0664
+#     owner: postgres
+#     group: postgres
+
+# - name: Add script to be run for restore_command
+#   template:
+#     src: "files/walg_helper_scripts/wal_fetch.sh"
+#     dest: /home/postgres/wal_fetch.sh
+#     mode: 0500
+#     owner: postgres
+#     group: postgres
+
+# - name: Add helper script for wal_fetch.sh
+#   template:
+#     src: "files/walg_helper_scripts/wal_change_ownership.sh"
+#     dest: /root/wal_change_ownership.sh
+#     mode: 0700
+#     owner: root
+
+# - name: Include /etc/postgresql-custom/wal-g.conf in postgresql.conf
+#   become: yes
+#   replace:
+#     path: /etc/postgresql/postgresql.conf
+#     regexp: "#include = '/etc/postgresql-custom/wal-g.conf'"
+#     replace: "include = '/etc/postgresql-custom/wal-g.conf'"
+
+# # Clean up Go
+# - name: Uninstall Go
+#   become: yes
+#   file:
+#     path: /usr/local/go
+#     state: absent

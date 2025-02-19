@@ -1,0 +1,34 @@
+2025/02/18 03:18:34 [INFO] Packer version: 1.12.0 [go1.22.9 darwin arm64]
+2025/02/18 03:18:34 [INFO] PACKER_CONFIG env var not set; checking the default config file path
+2025/02/18 03:18:34 [INFO] PACKER_CONFIG env var set; attempting to open config file: /Users/barneycook/.packerconfig
+2025/02/18 03:18:34 [WARN] Config file doesn't exist: /Users/barneycook/.packerconfig
+2025/02/18 03:18:34 [INFO] Setting cache directory: /Users/barneycook/.cache/packer
+
+  on ./stage2-nix-psql.pkr.hcl line 37, in variables:
+  37:   git_commit_sha {
+
+Blocks are not allowed here.
+
+Error: Undefined -var variable
+
+A "git_commit_sha" variable was passed in the command line but was not found in
+known variables. To declare variable "git_commit_sha", place this block in one
+of your .pkr files, such as variables.pkr.hcl
+
+Error: Unexpected "git_commit_sha" block
+
+2025/02/18 03:18:34 [INFO] (telemetry) Finalizing.
+  on ./stage2-nix-psql.pkr.hcl line 37, in variables:
+  37:   git_commit_sha {
+
+Blocks are not allowed here.
+
+Error: Undefined -var variable
+
+A "git_commit_sha" variable was passed in the command line but was not found in
+known variables. To declare variable "git_commit_sha", place this block in one
+of your .pkr files, such as variables.pkr.hcl
+
+
+2025/02/18 03:18:34 [WARN] (telemetry) Error finalizing report. This is safe to ignore. Post "https://checkpoint-api.hashicorp.com/v1/telemetry/packer": read tcp [2a06:5902:1a0a:1a00:b985:8020:f3c5:19a6]:60183->[2600:9000:225c:4600:4:b6df:d440:93a1]:443: read: connection reset by peer
+2025/02/18 03:18:34 waiting for all plugin processes to complete...

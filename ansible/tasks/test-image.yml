@@ -29,19 +29,43 @@
     cmd: /usr/lib/postgresql/bin/pg_ctl -D /var/lib/postgresql/data start "-o -c config_file=/etc/postgresql/postgresql.conf"
   when: debpkg_mode
 
+- name: Check if PostgreSQL PID file exists
+  stat:
+    path: /var/lib/postgresql/data/postmaster.pid
+  register: pg_pid_file
+  when: stage2_nix
+
 - name: Stop Postgres Database in stage 2
   become: yes
   become_user: postgres
-  shell: source /var/lib/postgresql/.bashrc &&  /usr/lib/postgresql/bin/pg_ctl -D /var/lib/postgresql/data stop
+  shell: |
+    source /var/lib/postgresql/.bashrc && /usr/lib/postgresql/bin/pg_ctl -D /var/lib/postgresql/data stop
   args:
     executable: /bin/bash
   environment:
     LANG: en_US.UTF-8
-    LANGUAGE: en_US.UTF-8
+    LANGUAGE: en_US:en
     LC_ALL: en_US.UTF-8
     LC_CTYPE: en_US.UTF-8
     LOCALE_ARCHIVE: /usr/lib/locale/locale-archive
-  when: stage2_nix
+  when: stage2_nix and pg_pid_file.stat.exists
+
+- name: Check logging.conf existence
+  stat:
+    path: /etc/postgresql/logging.conf
+  register: logging_conf
+- debug:
+    var: logging_conf.stat.exists
+
+- name: Ensure logging configuration file exists at /etc/postgresql/logging.conf
+  copy:
+    src: files/postgresql_config/postgresql-csvlog.conf
+    dest: /etc/postgresql/logging.conf
+    owner: postgres
+    group: postgres
+    mode: '0644'
+  when: debpkg_mode or stage2_nix
+
 
 - name: Start Postgres Database to load all extensions.
   become: yes

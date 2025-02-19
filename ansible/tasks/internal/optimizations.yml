@@ -13,19 +13,42 @@
     - salt-minion
   when: debpkg_mode 
 
+# - name: ensure services are stopped and disabled for first boot nix build
+#   systemd:
+#     enabled: no
+#     name: '{{ item }}'
+#     state: stopped
+#   loop:
+#     - postgresql
+#     - pgbouncer
+#     - fail2ban
+#     - motd-news
+#     - vector
+#     - salt-minion
+#   when: stage2_nix
+#   ignore_errors: yes
+
 - name: ensure services are stopped and disabled for first boot nix build
-  systemd:
-    enabled: no
-    name: '{{ item }}'
-    state: stopped
-  with_items:
-    - postgresql
-    - pgbouncer
-    - fail2ban
-    - motd-news
-    - vector
-    - salt-minion
+  block:
+    - name: Stop and disable services if they exist
+      systemd:
+        enabled: no
+        name: '{{ item }}'
+        state: stopped
+      loop:
+        - postgresql
+        - pgbouncer
+        - fail2ban
+        - motd-news
+        - vector
+        - salt-minion
+      register: service_result
+      failed_when: 
+        - service_result.failed is defined 
+        - service_result.failed
+        - '"Could not find the requested service" not in service_result.msg'
   when: stage2_nix
+
 
 - name: disable man-db
   become: yes

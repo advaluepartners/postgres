@@ -146,6 +146,10 @@ expected_results = {
 }
 # This program depends on osquery being installed on the system
 # Function to run osquery
+def normalize_results(results):
+    """Sort results by groupname to ensure consistent comparison."""
+    return sorted(results, key=lambda x: x['groupname'])
+
 def run_osquery(query):
     process = subprocess.Popen(['osqueryi', '--json', query], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     output, error = process.communicate()
@@ -164,7 +168,11 @@ def compare_results(username, query_result):
         print(f"No expected result defined for user '{username}'")
         sys.exit(1)
 
-    if query_result == expected_result:
+    # Normalize both results before comparison
+    normalized_expected = normalize_results(expected_result)
+    normalized_actual = normalize_results(query_result)
+
+    if normalized_actual == normalized_expected:
         print(f"The query result for user '{username}' matches the expected result.")
     else:
         print(f"The query result for user '{username}' does not match the expected result.")
@@ -190,12 +198,21 @@ def check_nixbld_users():
     
     print("All nixbld users are in the 'nixbld' group.")
 
+# Keep your existing usernames list as is
 # Define usernames for which you want to compare results
 usernames = ["postgres", "ubuntu", "root", "daemon", "bin", "sys", "sync", "games","man","lp","mail","news","uucp","proxy","www-data","backup","list","irc","gnats","nobody","systemd-network","systemd-resolve","systemd-timesync","messagebus","ec2-instance-connect","sshd","wal-g","pgbouncer","gotrue","envoy","kong","nginx","vector","adminapi","postgrest","tcpdump","systemd-coredump"]
 
 # Iterate over usernames, run the query, and compare results
+# Modify the query to include ordering
 for username in usernames:
-    query = f"SELECT u.username, g.groupname FROM users u JOIN user_groups ug ON u.uid = ug.uid JOIN groups g ON ug.gid = g.gid WHERE u.username = '{username}';"
+    query = f"""
+    SELECT u.username, g.groupname 
+    FROM users u 
+    JOIN user_groups ug ON u.uid = ug.uid 
+    JOIN groups g ON ug.gid = g.gid 
+    WHERE u.username = '{username}' 
+    ORDER BY g.groupname;
+    """
     query_result = run_osquery(query)
     parsed_result = parse_json(query_result)
     compare_results(username, parsed_result)

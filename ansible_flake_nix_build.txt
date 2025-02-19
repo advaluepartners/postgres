@@ -1,0 +1,4049 @@
+Here is the txt file that represents the folders and files in my github hub repo to build an ec2 and build and run a postrgesSQL db. The set id done by using github actions with nix, ansible and docker Each file in this repo separated by the sequence '''--- , followed by the file path, ending with ---. Each file's content begins immediately after its file path and extends until the next sequence of '''---
+
+*Folder: /postgres/ansible/playbook.yml*
+
+*Folder: /postgres/ansible/vars.yml*
+
+*Folder: /postgres/ansible/tasks*
+tasks/
+    setup-envoy.yml
+    fix_ipv6_ndisc.yml
+    setup-pgbouncer.yml
+    setup-docker.yml
+    setup-fail2ban.yml
+    setup-kong.yml
+    setup-extensions.yml
+    setup-system.yml
+    setup-vector.yml
+    setup-postgrest.yml
+    setup-migrations.yml
+    setup-nginx.yml
+    test-image.yml
+    finalize-ami.yml
+    setup-wal-g.yml
+    stage2-setup-postgres.yml
+    setup-gotrue.yml
+    setup-supabase-internal.yml
+    setup-postgres.yml
+    clean-build-dependencies.yml
+internal/
+    supautils.yml
+    postgresql-prestart.yml
+    optimizations.yml
+    admin-api.yml
+    install-salt.yml
+    pg_egress_collect.yml
+    admin-mgr.yml
+    collect-pg-binaries.yml
+    setup-ansible-pull.yml
+    postgres-exporter.yml
+    setup-nftables.yml
+
+*Folder: /postgres/amazon-arm64-nix.pkr.hcl*
+
+*Folder: /postgres/stage2-nix-psql.pkr.hcl*
+
+*Folder: /postgres/flake.nix*
+
+*Folder: /postgres/build.sh*
+
+
+File contents:
+
+'''--- /postgres/ansible/tasks/setup-envoy.yml ---
+# Group and user creation first
+- name: Envoy - create group
+  group:
+    name: envoy
+    state: present
+    system: yes
+  when: stage2_nix
+
+- name: Envoy - system user
+  user:
+    name: envoy
+    system: yes
+    group: envoy
+    shell: /bin/false
+    create_home: no
+  when: stage2_nix
+
+# Verify user creation
+- name: Verify envoy user creation
+  shell: |
+    getent passwd envoy || echo "User missing"
+    getent group envoy || echo "Group missing"
+  register: user_check
+  changed_when: false
+  when: stage2_nix
+
+- name: Display user verification
+  debug:
+    var: user_check.stdout_lines
+  when: stage2_nix
+
+# - name: Verify envoy user and group setup
+#   block:
+#     - name: Check envoy user and group existence
+#       shell: |
+#         echo "=== Envoy User/Group Verification ==="
+#         id envoy
+#         echo "Group details:"
+#         getent group envoy
+#       register: envoy_verify
+#       changed_when: false
+
+#     - name: Display verification results
+#       debug:
+#         var: envoy_verify.stdout_lines
+#   when: stage2_nix
+
+# Then create directories
+- name: Create envoy directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: envoy
+    group: envoy
+    mode: '0755'
+    recurse: yes
+  with_items:
+    - /opt/envoy
+    - /etc/envoy
+  when: stage2_nix
+
+- name: Verify directory permissions
+  shell: |
+    ls -la /opt/envoy
+    ls -la /etc/envoy
+  register: dir_check
+  changed_when: false
+  when: stage2_nix
+
+- name: Display directory verification
+  debug:
+    var: dir_check.stdout_lines
+  when: stage2_nix
+
+
+# Download and setup binaries
+- name: Envoy - download binary
+  get_url:
+    checksum: "{{ envoy_release_checksum }}"
+    dest: /opt/envoy
+    group: envoy
+    mode: '0755'
+    owner: envoy
+    url: "https://github.com/envoyproxy/envoy/releases/download/v{{ envoy_release }}/envoy-{{ envoy_release }}-linux-aarch_64"
+  when: stage2_nix
+
+- name: Envoy - download hot restarter script
+  get_url:
+    checksum: "{{ envoy_hot_restarter_release_checksum }}"
+    dest: /opt/envoy-hot-restarter.py
+    group: envoy
+    mode: '0755'
+    owner: envoy
+    url: "https://raw.githubusercontent.com/envoyproxy/envoy/v{{ envoy_release }}/restarter/hot-restarter.py"
+  when: stage2_nix
+
+# System configurations
+- name: Envoy - bump up ulimit
+  community.general.pam_limits:
+    domain: envoy
+    limit_item: nofile
+    limit_type: soft
+    value: 4096
+  when: stage2_nix
+
+# Configuration files
+- name: Envoy - create script to start envoy
+  copy:
+    dest: /opt/start-envoy.sh
+    group: envoy
+    mode: '0755'
+    owner: envoy
+    src: files/start-envoy.sh
+  when: stage2_nix
+
+- name: Envoy - create configuration files
+  copy:
+    dest: /etc/envoy/
+    directory_mode: '0775'
+    group: envoy
+    mode: '0664'
+    owner: envoy
+    src: files/envoy_config/
+  when: stage2_nix
+
+# Service setup
+- name: Envoy - create service file
+  copy:
+    dest: /etc/systemd/system/envoy.service
+    mode: '0644'
+    src: files/envoy.service
+  when: stage2_nix
+
+- name: Envoy - configure systemd
+  systemd:
+    daemon_reload: true
+    enabled: false
+    name: envoy
+    state: stopped
+  when: stage2_nix
+
+- name: Verify envoy final setup
+  block:
+    - name: Check envoy installation
+      shell: |
+        echo "=== Final Envoy Setup Verification ==="
+        # Check executable permissions
+        if [ ! -x /opt/envoy ]; then
+          echo "Envoy binary not executable"
+          exit 1
+        fi
+        if [ ! -x /opt/envoy-hot-restarter.py ]; then
+          echo "Hot restarter not executable"
+          exit 1
+        fi
+        # Check directory existence
+        if [ ! -d /etc/envoy ]; then
+          echo "Config directory missing"
+          exit 1
+        fi
+        # Check user and group
+        if ! getent passwd envoy >/dev/null; then
+          echo "User missing"
+          exit 1
+        fi
+        if ! getent group envoy >/dev/null; then
+          echo "Group missing"
+          exit 1
+        fi
+        if ! id envoy | grep -q "envoy"; then
+          echo "Group membership incorrect"
+          exit 1
+        fi
+      register: install_check
+      changed_when: false
+
+    - name: Debug verification results
+      debug:
+        var: install_check.stdout_lines
+  when: stage2_nix
+
+- name: Verify envoy configuration
+  shell: |
+    echo "Checking configuration files..."
+    ls -la /etc/envoy/
+    echo "Checking binary permissions..."
+    ls -la /opt/envoy*
+  register: config_check
+  changed_when: false
+  when: stage2_nix
+
+- name: Show configuration check results
+  debug:
+    var: config_check.stdout_lines
+  when: stage2_nix
+
+# - name: Envoy - system user
+#   ansible.builtin.user:
+#     name: envoy
+
+# - name: Envoy - download binary
+#   ansible.builtin.get_url:
+#     checksum: "{{ envoy_release_checksum }}"
+#     dest: /opt/envoy
+#     group: envoy
+#     mode: u+x
+#     owner: envoy
+#     # yamllint disable-line rule:line-length
+#     url: "https://github.com/envoyproxy/envoy/releases/download/v{{ envoy_release }}/envoy-{{ envoy_release }}-linux-aarch_64"
+
+# - name: Envoy - download hot restarter script
+#   ansible.builtin.get_url:
+#     checksum: "{{ envoy_hot_restarter_release_checksum }}"
+#     dest: /opt/envoy-hot-restarter.py
+#     group: envoy
+#     mode: u+x
+#     owner: envoy
+#     # yamllint disable-line rule:line-length
+#     url: https://raw.githubusercontent.com/envoyproxy/envoy/v{{ envoy_release }}/restarter/hot-restarter.py
+
+# - name: Envoy - bump up ulimit
+#   community.general.pam_limits:
+#     domain: envoy
+#     limit_item: nofile
+#     limit_type: soft
+#     value: 4096
+
+# - name: Envoy - create script to start envoy
+#   ansible.builtin.copy:
+#     dest: /opt/start-envoy.sh
+#     group: envoy
+#     mode: u+x
+#     owner: envoy
+#     src: files/start-envoy.sh
+
+# - name: Envoy - create configuration files
+#   ansible.builtin.copy:
+#     dest: /etc/envoy/
+#     directory_mode: u=rwx,g=rwx,o=rx
+#     group: envoy
+#     mode: u=rw,g=rw,o=r
+#     owner: envoy
+#     src: files/envoy_config/
+
+# - name: Envoy - create service file
+#   ansible.builtin.copy:
+#     dest: /etc/systemd/system/envoy.service
+#     mode: u=rw,g=r,o=r
+#     src: files/envoy.service
+
+# - name: Envoy - disable service
+#   ansible.builtin.systemd:
+#     daemon_reload: true
+#     enabled: false
+#     name: envoy
+#     state: stopped
+
+'''
+'''--- /postgres/ansible/tasks/fix_ipv6_ndisc.yml ---
+---
+- name: fix Network - systemd timer file
+  copy:
+    dest: /etc/systemd/system/systemd-networkd-check-and-fix.timer
+    src: "files/systemd-networkd/systemd-networkd-check-and-fix.timer"
+    owner: root
+    group: root
+    mode: 0644
+
+- name: fix Network - systemd service file
+  copy:
+    dest: /etc/systemd/system/systemd-networkd-check-and-fix.service
+    src: "files/systemd-networkd/systemd-networkd-check-and-fix.service"
+    owner: root
+    group: root
+    mode: 0644
+
+- name: fix Network - detect script
+  copy:
+    dest: /usr/local/bin/systemd-networkd-check-and-fix.sh
+    src: "files/systemd-networkd/systemd-networkd-check-and-fix.sh"
+    owner: root
+    group: root
+    mode: 0700
+
+- name: fix Network - reload systemd
+  systemd:
+    daemon_reload: yes
+
+- name: fix Network - enable systemd timer
+  systemd:
+    name: systemd-networkd-check-and-fix.timer
+    enabled: true
+
+'''
+'''--- /postgres/ansible/tasks/setup-pgbouncer.yml ---
+# Keep the installation tasks but add conditions
+- name: PgBouncer - download & install dependencies
+  apt:
+    pkg:
+      - build-essential
+      - libssl-dev
+      - pkg-config
+      - libevent-dev
+      - libsystemd-dev
+    update_cache: yes
+    cache_valid_time: 3600
+  when: debpkg_mode or stage2_nix
+
+# Add when conditions to download, unpack, configure, build, install
+- name: PgBouncer - download latest release
+  get_url:
+    url: "https://www.pgbouncer.org/downloads/files/{{ pgbouncer_release }}/pgbouncer-{{ pgbouncer_release }}.tar.gz"
+    dest: /tmp/pgbouncer-{{ pgbouncer_release }}.tar.gz
+    checksum: "{{ pgbouncer_release_checksum }}"
+    timeout: 60
+  when: debpkg_mode or stage2_nix
+
+- name: PgBouncer - unpack archive
+  unarchive:
+    remote_src: yes
+    src: /tmp/pgbouncer-{{ pgbouncer_release }}.tar.gz
+    dest: /tmp
+  become: yes
+
+- name: PgBouncer - configure
+  shell:
+    cmd: "./configure --prefix=/usr/local --with-systemd"
+    chdir: /tmp/pgbouncer-{{ pgbouncer_release }}
+  become: yes
+
+- name: PgBouncer - build
+  make:
+    chdir: /tmp/pgbouncer-{{ pgbouncer_release }}
+  become: yes
+
+- name: PgBouncer - install
+  make:
+    chdir: /tmp/pgbouncer-{{ pgbouncer_release }}
+    target: install
+  become: yes
+
+- name: Debug - Show execution mode
+  debug:
+    msg: 
+      - "Running in: {{ 'nixpkg_mode' if nixpkg_mode | default(false) else 'debpkg_mode' if debpkg_mode | default(false) else 'stage2_nix' if stage2_nix | default(false) else 'unknown' }} mode"
+
+- name: Debug - Initial group status
+  shell: |
+    echo "=== Initial Group Status ==="
+    for group in postgres ssl-cert pgbouncer; do
+      echo "[$group]"
+      getent group $group || echo "not found"
+    done
+  register: initial_groups
+  changed_when: false
+
+# Group and user management - consolidated version
+- name: Ensure required groups exist with specific GIDs
+  group:
+    name: "{{ item.name }}"
+    gid: "{{ item.gid }}"
+    state: present
+    system: yes
+  loop:
+    - { name: 'postgres', gid: 1002 }
+    - { name: 'ssl-cert', gid: 1001 }
+    - { name: 'pgbouncer', gid: 101 }
+  when: stage2_nix
+
+- name: Create pgbouncer user
+  user:
+    name: pgbouncer
+    uid: 101
+    shell: /bin/false
+    system: yes
+    comment: PgBouncer user
+    group: pgbouncer
+  when: stage2_nix
+
+- name: Add pgbouncer to groups and verify
+  block:
+    - name: Add pgbouncer to groups
+      shell: |
+        usermod -a -G postgres,ssl-cert pgbouncer
+        systemctl daemon-reload
+        if command -v nscd >/dev/null 2>&1; then
+          nscd -i group
+          nscd -i passwd
+        fi
+        sleep 2
+        # Verify membership
+        id pgbouncer | grep -q "postgres" && \
+        id pgbouncer | grep -q "ssl-cert" && \
+        id pgbouncer | grep -q "pgbouncer"
+      register: group_add_result
+      failed_when: group_add_result.rc != 0
+
+    - name: Verify final group memberships
+      shell: |
+        echo "=== Final Group Memberships ==="
+        id pgbouncer
+        echo "Group details:"
+        getent group postgres
+        getent group ssl-cert
+        getent group pgbouncer
+      register: final_verify
+  when: stage2_nix
+
+# Directory and file setup
+- name: Create PgBouncer directories
+  file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: pgbouncer
+    group: pgbouncer
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: '/etc/pgbouncer', mode: '0700' }
+    - { path: '/etc/pgbouncer-custom', mode: '0775' }
+  when: stage2_nix
+
+- name: Create config files
+  file:
+    path: "/etc/pgbouncer-custom/{{ item }}"
+    state: touch
+    owner: pgbouncer
+    group: pgbouncer
+    mode: '0664'
+  loop:
+    - 'generated-optimizations.ini'
+    - 'custom-overrides.ini'
+    - 'ssl-config.ini'
+  when: stage2_nix
+
+# Configuration files
+- name: Configure PgBouncer
+  block:
+    - name: Copy pgbouncer.ini
+      copy:
+        src: files/pgbouncer_config/pgbouncer.ini.j2
+        dest: /etc/pgbouncer/pgbouncer.ini
+        owner: pgbouncer
+        mode: '0700'
+
+    - name: Create userlist.txt
+      file:
+        path: /etc/pgbouncer/userlist.txt
+        state: touch
+        owner: pgbouncer
+        mode: '0700'
+
+    - name: Configure tmpfiles.d
+      template:
+        src: files/pgbouncer_config/tmpfiles.d-pgbouncer.conf.j2
+        dest: /etc/tmpfiles.d/pgbouncer.conf
+
+    - name: Configure SSL
+      copy:
+        dest: /etc/pgbouncer-custom/ssl-config.ini
+        content: |
+          client_tls_sslmode = allow
+        owner: pgbouncer
+        group: pgbouncer
+        mode: '0664'
+  when: stage2_nix
+
+# Permissions and fail2ban
+- name: Configure permissions and security
+  block:
+    - name: Set file permissions
+      shell: |
+        chmod g+w /etc/postgresql/pg_hba.conf
+        chmod g+w /etc/pgbouncer-custom/ssl-config.ini
+
+    - name: Configure fail2ban
+      template:
+        src: "files/fail2ban_config/{{ item.src }}"
+        dest: "/etc/fail2ban/{{ item.dest }}"
+      loop:
+        - { src: 'jail-pgbouncer.conf.j2', dest: 'jail.d/pgbouncer.conf' }
+        - { src: 'filter-pgbouncer.conf.j2', dest: 'filter.d/pgbouncer.conf' }
+  when: stage2_nix
+
+# Systemd setup
+- name: Configure systemd
+  block:
+    - name: Install service file
+      template:
+        src: files/pgbouncer_config/pgbouncer.service.j2
+        dest: /etc/systemd/system/pgbouncer.service
+
+    - name: Reload systemd
+      systemd:
+        daemon_reload: yes
+  when: stage2_nix
+'''
+'''--- /postgres/ansible/tasks/setup-docker.yml ---
+- name: Copy extension packages
+  copy:
+    src: files/extensions/
+    dest: /tmp/extensions/
+  when: debpkg_mode
+
+# Builtin apt module does not support wildcard for deb paths
+- name: Install extensions
+  shell: |
+    set -e
+    apt-get update
+    apt-get install -y --no-install-recommends /tmp/extensions/*.deb
+  when: debpkg_mode
+
+- name: pgsodium - determine postgres bin directory
+  shell: pg_config --bindir
+  register: pg_bindir_output
+  when: debpkg_mode
+  
+- set_fact:
+    pg_bindir: "{{ pg_bindir_output.stdout }}"
+  when: debpkg_mode 
+
+- name: pgsodium - set pgsodium.getkey_script
+  become: yes
+  lineinfile:
+    path: /etc/postgresql/postgresql.conf
+    state: present
+    # script is expected to be placed by finalization tasks for different target platforms
+    line: pgsodium.getkey_script= '{{ pg_bindir }}/pgsodium_getkey.sh'
+  when: debpkg_mode
+
+# supautils
+- name: supautils - add supautils to session_preload_libraries
+  become: yes
+  replace:
+    path: /etc/postgresql/postgresql.conf
+    regexp: "#session_preload_libraries = ''"
+    replace: session_preload_libraries = 'supautils'
+  when: debpkg_mode or stage2_nix
+
+- name: supautils - write custom supautils.conf
+  template:
+    src: "files/postgresql_config/supautils.conf.j2"
+    dest: /etc/postgresql-custom/supautils.conf
+    mode: 0664
+    owner: postgres
+    group: postgres
+  when: debpkg_mode or stage2_nix
+
+- name: supautils - copy extension custom scripts
+  copy:
+    src: files/postgresql_extension_custom_scripts/
+    dest: /etc/postgresql-custom/extension-custom-scripts
+  become: yes
+  when: debpkg_mode or stage2_nix
+
+- name: supautils - chown extension custom scripts
+  file:
+    mode: 0775
+    owner: postgres
+    group: postgres
+    path: /etc/postgresql-custom/extension-custom-scripts
+    recurse: yes
+  become: yes
+  when: debpkg_mode or stage2_nix
+
+- name: supautils - include /etc/postgresql-custom/supautils.conf in postgresql.conf
+  become: yes
+  replace:
+    path: /etc/postgresql/postgresql.conf
+    regexp: "#include = '/etc/postgresql-custom/supautils.conf'"
+    replace: "include = '/etc/postgresql-custom/supautils.conf'"
+  when: debpkg_mode or stage2_nix
+
+- name: Cleanup - extension packages
+  file:
+    path: /tmp/extensions
+    state: absent
+  when: debpkg_mode
+
+'''
+'''--- /postgres/ansible/tasks/setup-fail2ban.yml ---
+# set default bantime to 1 hour
+- name: extend bantime
+  become: yes
+  replace:
+    path: /etc/fail2ban/jail.conf
+    regexp: bantime  = 10m
+    replace: bantime  = 3600
+  when: debpkg_mode or nixpkg_mode
+
+- name: Configure journald
+  copy:
+    src: files/fail2ban_config/jail-ssh.conf
+    dest: /etc/fail2ban/jail.d/sshd.local
+  when: debpkg_mode or nixpkg_mode
+
+- name: configure fail2ban to use nftables
+  copy:
+    src: files/fail2ban_config/jail.local
+    dest: /etc/fail2ban/jail.local
+  when: debpkg_mode or nixpkg_mode
+
+# postgresql
+- name: import jail.d/postgresql.conf
+  template:
+    src: files/fail2ban_config/jail-postgresql.conf.j2
+    dest: /etc/fail2ban/jail.d/postgresql.conf
+  become: yes
+  when: debpkg_mode or nixpkg_mode
+
+- name: import filter.d/postgresql.conf
+  template:
+    src: files/fail2ban_config/filter-postgresql.conf.j2
+    dest: /etc/fail2ban/filter.d/postgresql.conf
+  become: yes
+  when: debpkg_mode or nixpkg_mode
+
+- name: create overrides dir
+  file:
+    state: directory
+    owner: root
+    group: root
+    path: /etc/systemd/system/fail2ban.service.d
+    mode: '0700'
+  when: debpkg_mode or nixpkg_mode
+
+- name: Custom systemd overrides
+  copy:
+    src: files/fail2ban_config/fail2ban.service.conf
+    dest: /etc/systemd/system/fail2ban.service.d/overrides.conf
+  when: debpkg_mode or nixpkg_mode
+
+- name: add in supabase specific ignore filters
+  lineinfile:
+    path: /etc/fail2ban/filter.d/postgresql.conf
+    state: present
+    line: "{{ item.line }}"
+  loop:
+    - { line: '              ^.*,.*,.*,.*,"<HOST>:.*password authentication failed for user ""supabase_admin".*$' }
+    - { line: '              ^.*,.*,.*,.*,"<HOST>:.*password authentication failed for user ""supabase_auth_admin".*$' }
+    - { line: '              ^.*,.*,.*,.*,"<HOST>:.*password authentication failed for user ""supabase_storage_admin".*$' }
+    - { line: '              ^.*,.*,.*,.*,"<HOST>:.*password authentication failed for user ""authenticator".*$' }
+    - { line: '              ^.*,.*,.*,.*,"<HOST>:.*password authentication failed for user ""pgbouncer".*$' }
+  become: yes
+  tags:
+    - install-supabase-internal
+  when: debpkg_mode or nixpkg_mode
+
+# Restart
+- name: fail2ban - restart
+  systemd:
+    name: fail2ban
+    state: restarted
+  when: debpkg_mode or nixpkg_mode
+
+- name: fail2ban - disable service
+  systemd:
+    name: fail2ban
+    enabled: no
+    daemon_reload: yes
+  when: debpkg_mode or nixpkg_mode
+'''
+'''--- /postgres/ansible/tasks/setup-kong.yml ---
+# User and group setup first
+- name: Kong - create group
+  group:
+    name: kong
+    state: present
+    system: yes
+  when: stage2_nix
+
+- name: Kong - system user
+  user:
+    name: kong
+    system: yes
+    group: kong
+    shell: /bin/false
+    create_home: no
+  when: stage2_nix
+
+- name: Verify Kong user and group setup
+  block:
+    - name: Check Kong user and group existence
+      shell: |
+        echo "=== Kong User/Group Verification ==="
+        id kong || echo "User kong not found"
+        getent group kong || echo "Group kong not found"
+      register: kong_verify
+      changed_when: false
+
+    - name: Display verification results
+      debug:
+        var: kong_verify.stdout_lines
+  when: stage2_nix
+
+# Rest of Kong installation
+- name: Kong - system dependencies
+  apt:
+    pkg:
+      - openssl
+      - libpcre3
+      - procps
+      - perl
+    state: present
+  when: stage2_nix
+
+- name: Kong - download deb package
+  get_url:
+    url: "https://packages.konghq.com/public/gateway-28/deb/ubuntu/pool/{{ kong_release_target }}/main/k/ko/kong_2.8.1/{{ kong_deb }}"
+    dest: /tmp/kong.deb
+    checksum: "{{ kong_deb_checksum }}"
+  when: stage2_nix
+
+- name: Kong - deb installation
+  apt: 
+    deb: file:///tmp/kong.deb
+  when: stage2_nix
+
+- name: Kong - ensure it is NOT autoremoved
+  shell: |
+    set -e
+    apt-mark manual kong zlib1g*
+  when: stage2_nix
+
+- name: Kong - configuration
+  template:
+    src: files/kong_config/kong.conf.j2
+    dest: /etc/kong/kong.conf
+    owner: kong
+    group: kong
+    mode: '0644'
+  when: stage2_nix
+
+- name: Kong - hand over ownership of /usr/local/kong to user kong
+  file:
+    path: /usr/local/kong
+    recurse: yes
+    owner: kong
+    group: kong
+    mode: '0755'
+  when: stage2_nix
+
+- name: Kong - bump up ulimit
+  pam_limits:
+    limit_item: nofile
+    limit_type: soft
+    domain: kong
+    value: "4096"
+  when: stage2_nix
+
+- name: Kong - create env file
+  template:
+    src: files/kong_config/kong.env.j2
+    dest: /etc/kong/kong.env
+    owner: kong
+    group: kong
+    mode: '0644'
+  when: stage2_nix
+
+- name: Kong - create service file
+  template:
+    src: files/kong_config/kong.service.j2
+    dest: /etc/systemd/system/kong.service
+    mode: '0644'
+  when: stage2_nix
+
+- name: Kong - final verification
+  block:
+    - name: Verify Kong installation
+      shell: |
+        echo "=== Kong Installation Verification ==="
+        id kong
+        ls -la /usr/local/kong
+        ls -la /etc/kong
+        getent group kong
+      register: final_verify
+      changed_when: false
+
+    - name: Display final verification
+      debug:
+        var: final_verify.stdout_lines
+  when: stage2_nix
+
+- name: Kong - disable service
+  systemd:
+    enabled: no
+    name: kong
+    state: stopped
+    daemon_reload: yes
+  when: stage2_nix
+
+# - name: Kong - system user
+#   user: name=kong
+
+# # Kong installation steps from http://archive.vn/3HRQx
+# - name: Kong - system dependencies
+#   apt:
+#     pkg:
+#       - openssl
+#       - libpcre3
+#       - procps
+#       - perl
+
+# - name: Kong - download deb package
+#   get_url:
+#     url: "https://packages.konghq.com/public/gateway-28/deb/ubuntu/pool/{{ kong_release_target }}/main/k/ko/kong_2.8.1/{{ kong_deb }}"
+#     dest: /tmp/kong.deb
+#     checksum: "{{ kong_deb_checksum }}"
+
+# - name: Kong - deb installation
+#   apt: deb=file:///tmp/kong.deb
+
+# - name: Kong - ensure it is NOT autoremoved
+#   shell: |
+#     set -e
+#     apt-mark manual kong zlib1g*
+
+# - name: Kong - configuration
+#   template:
+#     src: files/kong_config/kong.conf.j2
+#     dest: /etc/kong/kong.conf
+
+# - name: Kong - hand over ownership of /usr/local/kong to user kong
+#   file:
+#     path: /usr/local/kong
+#     recurse: yes
+#     owner: kong
+
+# # [warn] ulimit is currently set to "1024". For better performance set it to at least
+# # "4096" using "ulimit -n"
+# - name: Kong - bump up ulimit
+#   pam_limits:
+#     limit_item: nofile
+#     limit_type: soft
+#     domain: kong
+#     value: "4096"
+
+# - name: Kong - create env file
+#   template:
+#     src: files/kong_config/kong.env.j2
+#     dest: /etc/kong/kong.env
+
+# - name: Kong - create service file
+#   template:
+#     src: files/kong_config/kong.service.j2
+#     dest: /etc/systemd/system/kong.service
+
+# - name: Kong - disable service
+#   systemd:
+#     enabled: no
+#     name: kong
+#     state: stopped
+#     daemon_reload: yes
+
+'''
+'''--- /postgres/ansible/tasks/setup-extensions.yml ---
+- name: Install plv8
+  import_tasks: tasks/postgres-extensions/13-plv8.yml
+
+- name: Install pg_jsonschema
+  import_tasks: tasks/postgres-extensions/22-pg_jsonschema.yml
+
+- name: Install postgis
+  import_tasks: tasks/postgres-extensions/01-postgis.yml
+
+- name: Install pgrouting
+  import_tasks: tasks/postgres-extensions/02-pgrouting.yml
+
+- name: Install pgtap
+  import_tasks: tasks/postgres-extensions/03-pgtap.yml
+
+- name: Install pg_cron
+  import_tasks: tasks/postgres-extensions/04-pg_cron.yml
+
+- name: Install pgaudit
+  import_tasks: tasks/postgres-extensions/05-pgaudit.yml
+
+- name: Install pgjwt
+  import_tasks: tasks/postgres-extensions/06-pgjwt.yml
+
+- name: Install pgsql-http
+  import_tasks: tasks/postgres-extensions/07-pgsql-http.yml
+
+- name: Install plpgsql_check
+  import_tasks: tasks/postgres-extensions/08-plpgsql_check.yml
+
+- name: Install pg-safeupdate
+  import_tasks: tasks/postgres-extensions/09-pg-safeupdate.yml
+
+- name: Install timescaledb
+  import_tasks: tasks/postgres-extensions/10-timescaledb.yml
+
+- name: Install wal2json
+  import_tasks: tasks/postgres-extensions/11-wal2json.yml
+
+- name: Install pljava
+  import_tasks: tasks/postgres-extensions/12-pljava.yml
+  tags:
+    - legacy-incompatible
+
+- name: Install pg_plan_filter
+  import_tasks: tasks/postgres-extensions/14-pg_plan_filter.yml
+
+- name: Install pg_net
+  import_tasks: tasks/postgres-extensions/15-pg_net.yml
+
+- name: Install rum
+  import_tasks: tasks/postgres-extensions/16-rum.yml
+
+- name: Install pg_hashids
+  import_tasks: tasks/postgres-extensions/17-pg_hashids.yml
+
+- name: Install pgsodium
+  import_tasks: tasks/postgres-extensions/18-pgsodium.yml
+
+- name: Install pg_graphql
+  import_tasks: tasks/postgres-extensions/19-pg_graphql.yml
+  tags:
+    - legacy-incompatible
+
+- name: Install pg_stat_monitor
+  import_tasks: tasks/postgres-extensions/20-pg_stat_monitor.yml
+
+- name: Install vault
+  import_tasks: tasks/postgres-extensions/23-vault.yml
+
+- name: Install PGroonga
+  import_tasks: tasks/postgres-extensions/24-pgroonga.yml
+
+- name: Install wrappers
+  import_tasks: tasks/postgres-extensions/25-wrappers.yml
+
+- name: Install hypopg
+  import_tasks: tasks/postgres-extensions/26-hypopg.yml
+
+ - name: Install pg_repack
+  import_tasks: tasks/postgres-extensions/27-pg_repack.yml
+  
+- name: Install pgvector
+  import_tasks: tasks/postgres-extensions/28-pgvector.yml
+
+- name: Install Trusted Language Extensions
+  import_tasks: tasks/postgres-extensions/29-pg_tle.yml
+
+- name: Verify async task status
+  import_tasks: tasks/postgres-extensions/99-finish_async_tasks.yml
+  when: async_mode
+ 
+'''
+'''--- /postgres/ansible/tasks/setup-system.yml ---
+- name: System - apt update and apt upgrade
+  apt: update_cache=yes upgrade=yes
+  when: debpkg_mode or nixpkg_mode
+  # SEE http://archive.vn/DKJjs#parameter-upgrade
+
+- name: Install required security updates
+  apt:
+    pkg:
+      - tzdata
+      - linux-libc-dev
+  when: debpkg_mode or nixpkg_mode
+# SEE https://github.com/georchestra/ansible/issues/55#issuecomment-588313638
+# Without this, a similar error is faced
+- name: Install Ansible dependencies
+  apt:
+    pkg:
+      - acl
+  when: debpkg_mode or nixpkg_mode
+
+- name: Install security tools
+  apt:
+    pkg:
+      - nftables
+      - fail2ban
+    update_cache: yes
+    cache_valid_time: 3600
+  when: debpkg_mode or nixpkg_mode
+
+- name: Use nftables backend
+  shell: |
+    update-alternatives --set iptables /usr/sbin/iptables-nft
+    update-alternatives --set ip6tables /usr/sbin/ip6tables-nft
+    update-alternatives --set arptables /usr/sbin/arptables-nft
+    update-alternatives --set ebtables /usr/sbin/ebtables-nft
+    systemctl restart ufw
+  when: debpkg_mode or nixpkg_mode
+
+- name: Create Sysstat log directory
+  file:
+    path: /var/log/sysstat
+    state: directory
+  when: debpkg_mode or nixpkg_mode
+    
+- name: Install other useful tools
+  apt:
+    pkg:
+      - bwm-ng
+      - htop
+      - net-tools
+      - ngrep
+      - sysstat
+      - vim-tiny
+    update_cache: yes
+  when: debpkg_mode or nixpkg_mode
+
+- name: Configure sysstat
+  copy:
+    src: files/sysstat.sysstat
+    dest: /etc/sysstat/sysstat
+  when: debpkg_mode or nixpkg_mode
+
+- name: Configure default sysstat
+  copy:
+    src: files/default.sysstat
+    dest: /etc/default/sysstat
+  when: debpkg_mode or nixpkg_mode
+
+
+- name: Adjust APT update intervals
+  copy:
+    src: files/apt_periodic
+    dest: /etc/apt/apt.conf.d/10periodic
+  when: debpkg_mode or nixpkg_mode
+
+# Find platform architecture and set as a variable
+- name: finding platform architecture
+  shell: if [ $(uname -m) = "aarch64" ]; then echo "arm64";  else echo "amd64"; fi
+  register: platform_output
+  tags:
+    - update
+    - update-only
+- set_fact:
+    platform: "{{ platform_output.stdout }}"
+  tags:
+    - update
+    - update-only
+  when: debpkg_mode or nixpkg_mode or stage2_nix
+
+- name: create overrides dir
+  file:
+    state: directory
+    owner: root
+    group: root
+    path: /etc/systemd/system/systemd-resolved.service.d
+    mode: '0700'
+  when: debpkg_mode or nixpkg_mode
+
+- name: Custom systemd overrides for resolved
+  copy:
+    src: files/systemd-resolved.conf
+    dest: /etc/systemd/system/systemd-resolved.service.d/override.conf
+  when: debpkg_mode or nixpkg_mode
+
+- name: System - Create services.slice
+  template:
+    src: files/services.slice.j2
+    dest: /etc/systemd/system/services.slice
+  when: debpkg_mode or nixpkg_mode
+
+
+- name: System - systemd reload
+  systemd: daemon_reload=yes
+  when: debpkg_mode or nixpkg_mode
+
+- name: Configure journald
+  copy:
+    src: files/journald.conf
+    dest: /etc/systemd/journald.conf
+  when: debpkg_mode or nixpkg_mode
+
+- name: reload systemd-journald
+  systemd:
+   name: systemd-journald
+   state: restarted
+  when: debpkg_mode or nixpkg_mode
+
+- name: Configure logind
+  copy:
+    src: files/logind.conf
+    dest: /etc/systemd/logind.conf
+  when: debpkg_mode or nixpkg_mode
+
+- name: reload systemd-logind
+  systemd:
+   name: systemd-logind
+   state: restarted
+  when: debpkg_mode or nixpkg_mode
+
+- name: enable timestamps for shell history
+  copy:
+    content: |
+      export HISTTIMEFORMAT='%d/%m/%y %T '
+    dest: /etc/profile.d/09-history-timestamps.sh
+    mode: 0644
+    owner: root
+    group: root
+  when: debpkg_mode or nixpkg_mode
+
+- name: set hosts file
+  copy:
+    content: |
+      127.0.0.1   localhost
+      ::1         localhost
+    dest: /etc/hosts
+    mode: 0644
+    owner: root
+    group: root
+  when: debpkg_mode or stage2_nix
+
+#Set Sysctl params for restarting the OS on oom after 10
+- name: Set vm.panic_on_oom=1
+  ansible.builtin.sysctl:
+    name: vm.panic_on_oom
+    value: '1'
+    state: present
+    reload: yes
+  when: debpkg_mode or nixpkg_mode
+
+- name: Set kernel.panic=10
+  ansible.builtin.sysctl:
+    name: kernel.panic
+    value: '10'
+    state: present
+    reload: yes
+  when: debpkg_mode or nixpkg_mode
+
+- name: configure system
+  ansible.posix.sysctl:
+    name: 'net.core.somaxconn'
+    value: 16834
+
+- name: configure system
+  ansible.posix.sysctl:
+    name: 'net.ipv4.ip_local_port_range'
+    value: '1025 65000'
+
+#Set Sysctl params specific to keepalives
+- name: Set net.ipv4.tcp_keepalive_time=1800
+  ansible.builtin.sysctl:
+    name: net.ipv4.tcp_keepalive_time
+    value: 1800
+    state: present
+  when: debpkg_mode or nixpkg_mode
+- name: Set net.ipv4.tcp_keepalive_intvl=60
+  ansible.builtin.sysctl:
+    name: net.ipv4.tcp_keepalive_intvl
+    value: 60
+    state: present
+  when: debpkg_mode or nixpkg_mode
+
+'''
+'''--- /postgres/ansible/tasks/setup-vector.yml ---
+# First create vector group and user
+- name: Vector - create group
+  group:
+    name: vector
+    state: present
+    system: yes
+  when: stage2_nix
+
+- name: Vector - system user
+  user:
+    name: vector
+    system: yes
+    group: vector
+    shell: /bin/false
+    create_home: no
+  when: stage2_nix
+
+- name: Add vector to required groups
+  user:
+    name: vector
+    groups: vector,adm,systemd-journal,postgres
+    append: yes
+  when: stage2_nix
+
+- name: Vector - install dependencies
+  apt:
+    pkg:
+      - curl
+      - ca-certificates
+    state: present
+  when: stage2_nix
+
+- name: Vector - download deb package
+  get_url:
+    url: "{{ vector_arm_deb if platform == 'arm64' else vector_x86_deb }}"
+    dest: /tmp/vector.deb
+  when: stage2_nix
+
+- name: Vector - install package
+  apt:
+    deb: /tmp/vector.deb
+  when: stage2_nix
+
+- name: Create vector directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: vector
+    group: vector
+    mode: '0755'
+  loop:
+    - /etc/vector
+    - /var/lib/vector
+    - /var/log/vector
+  when: stage2_nix
+
+- name: Verify vector setup
+  block:
+    - name: Check vector installation
+      shell: |
+        echo "=== Vector Installation Verification ==="
+        id vector
+        echo "Group memberships:"
+        for group in vector adm systemd-journal postgres; do
+          echo "Checking $group:"
+          getent group $group | grep vector || echo "Not in $group"
+        done
+        which vector || echo "Vector binary not found"
+        ls -la /etc/vector
+      register: verify_result
+      changed_when: false
+
+    - name: Show verification results
+      debug:
+        var: verify_result.stdout_lines
+  when: stage2_nix
+
+- name: Vector - create service file
+  template:
+    src: files/vector.service.j2
+    dest: /etc/systemd/system/vector.service
+    mode: '0644'
+  when: stage2_nix
+
+- name: Vector - reload systemd
+  systemd:
+    daemon_reload: yes
+  when: stage2_nix
+'''
+'''--- /postgres/ansible/tasks/setup-postgrest.yml ---
+- name: PostgREST - create group
+  group:
+    name: postgrest
+    state: present
+    system: yes
+  when: stage2_nix
+
+# - name: PostgREST - system user
+#   user: name=postgrest
+
+- name: PostgREST - add Postgres PPA gpg key
+  apt_key:
+    url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+    state: present
+
+- name: PostgREST - add Postgres PPA
+  apt_repository:
+    repo: "deb http://apt.postgresql.org/pub/repos/apt/ focal-pgdg main"
+    state: present
+  when: stage2_nix
+
+- name: PostgREST - system user
+  user:
+    name: postgrest
+    system: yes
+    group: postgrest
+    shell: /bin/false
+    create_home: no
+  when: stage2_nix
+
+- name: PostgREST - update apt cache
+  apt:
+    update_cache: yes
+  when: stage2_nix
+
+# libpq is a C library that enables user programs to communicate with
+# the PostgreSQL database server.
+
+- name: PostgREST - system dependencies
+  apt:
+    pkg:
+      - libpq5
+      - libnuma-dev
+  when: stage2_nix
+
+
+- name: PostgREST - remove Postgres PPA gpg key
+  apt_key:
+    url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+    state: absent
+
+- name: PostgREST - remove Postgres PPA
+  apt_repository:
+    repo: "deb http://apt.postgresql.org/pub/repos/apt/ focal-pgdg {{ postgresql_major }}"
+    state: absent
+
+- name: postgis - ensure dependencies do not get autoremoved
+  shell: |
+    set -e
+    apt-mark manual libpq5*
+    apt-mark manual libnuma*
+    apt-mark auto libnuma*-dev
+
+- name: PostgREST - download ubuntu binary archive (arm)
+  get_url:
+    url: "https://github.com/PostgREST/postgrest/releases/download/v{{ postgrest_release }}/postgrest-v{{ postgrest_release }}-ubuntu-aarch64.tar.xz"
+    dest: /tmp/postgrest.tar.xz
+    checksum: "{{ postgrest_arm_release_checksum }}"
+    timeout: 60
+  when: platform == "arm64"
+
+- name: PostgREST - download ubuntu binary archive (x86)
+  get_url:
+    url: "https://github.com/PostgREST/postgrest/releases/download/v{{ postgrest_release }}/postgrest-v{{ postgrest_release }}-linux-static-x64.tar.xz"
+    dest: /tmp/postgrest.tar.xz
+    checksum: "{{ postgrest_x86_release_checksum }}"
+    timeout: 60    
+  when: platform == "amd64"
+
+- name: PostgREST - unpack archive in /opt
+  unarchive:
+    remote_src: yes
+    src: /tmp/postgrest.tar.xz
+    dest: /opt
+    owner: postgrest
+    mode: '0755'
+
+- name: create directories
+  file:
+    state: directory
+    owner: postgrest
+    group: postgrest
+    mode: '0775'
+    path: /etc/postgrest
+
+- name: empty files
+  file:
+    state: touch
+    owner: postgrest
+    group: postgrest
+    path: /etc/postgrest/{{ item }}
+  with_items:
+    - base.conf
+    - generated.conf
+
+- name: create conf merging script
+  copy:
+    content: |
+      #! /usr/bin/env bash
+      set -euo pipefail
+      set -x
+
+      cd "$(dirname "$0")"
+      cat $@ > merged.conf
+    dest: /etc/postgrest/merge.sh
+    mode: 0750
+    owner: postgrest
+    group: postgrest
+
+- name: PostgREST - create service files
+  template:
+    src: files/{{ item }}.j2
+    dest: /etc/systemd/system/{{ item }}
+  with_items:
+    - postgrest.service
+    - postgrest-optimizations.service
+
+- name: PostgREST - reload systemd
+  systemd:
+    daemon_reload: yes
+
+'''
+'''--- /postgres/ansible/tasks/setup-migrations.yml ---
+- name: Run migrate.sh script
+  shell: ./migrate.sh
+  register: retval
+  when: debpkg_mode or stage2_nix
+  args:
+    chdir: /tmp/migrations/db
+  failed_when: retval.rc != 0
+
+- name: Create /root/MIGRATION-AMI file
+  file:
+    path: "/root/MIGRATION-AMI"
+    state: touch
+  when: debpkg_mode or stage2_nix
+
+'''
+'''--- /postgres/ansible/tasks/setup-nginx.yml ---
+# First create nginx group and user
+- name: Nginx - create group
+  group:
+    name: nginx
+    state: present
+    system: yes
+  when: stage2_nix
+
+- name: Nginx - system user
+  user:
+    name: nginx
+    system: yes
+    group: nginx
+    shell: /bin/false
+    create_home: no
+  when: stage2_nix
+
+- name: Verify nginx user setup
+  block:
+    - name: Check nginx user and group existence
+      shell: |
+        echo "=== Nginx User/Group Verification ==="
+        id nginx || echo "User nginx not found"
+        getent group nginx || echo "Group nginx not found"
+      register: nginx_verify
+      changed_when: false
+
+    - name: Display verification results
+      debug:
+        var: nginx_verify.stdout_lines
+  when: stage2_nix
+
+# Installation steps
+- name: Nginx - system dependencies
+  apt:
+    pkg:
+      - openssl
+      - libpcre3-dev
+      - libssl-dev
+      - zlib1g-dev
+    state: present
+  when: stage2_nix
+
+- name: Nginx - download source
+  get_url:
+    url: "https://nginx.org/download/nginx-{{ nginx_release }}.tar.gz"
+    dest: /tmp/nginx-{{ nginx_release }}.tar.gz
+    checksum: "{{ nginx_release_checksum }}"
+  when: stage2_nix
+
+- name: Nginx - unpack archive
+  unarchive:
+    remote_src: yes
+    src: /tmp/nginx-{{ nginx_release }}.tar.gz
+    dest: /tmp
+  when: stage2_nix
+
+- name: Nginx - configure
+  shell:
+    chdir: /tmp/nginx-{{ nginx_release }}
+    cmd: |
+      set -e
+      ./configure \
+      --prefix=/usr/local/nginx \
+      --conf-path=/etc/nginx/nginx.conf \
+      --with-http_ssl_module \
+      --with-http_realip_module \
+      --with-threads \
+      --user=nginx \
+      --group=nginx
+  become: yes
+  when: stage2_nix
+
+- name: Nginx - build
+  community.general.make:
+    target: build
+    chdir: /tmp/nginx-{{ nginx_release }}
+    jobs: "{{ parallel_jobs | default(omit) }}"
+  become: yes
+  when: stage2_nix
+
+- name: Nginx - install
+  make:
+    chdir: /tmp/nginx-{{ nginx_release }}
+    target: install
+  become: yes
+  when: stage2_nix
+
+- name: Create required nginx directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: nginx
+    group: nginx
+    mode: '0755'
+  loop:
+    - /usr/local/nginx
+    - /etc/nginx
+    - /var/log/nginx
+    - /var/cache/nginx
+  when: stage2_nix
+
+- name: Nginx - set ownership and permissions
+  block:
+    - name: Set ownership of nginx directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: nginx
+        group: nginx
+        mode: '0755'
+        recurse: yes
+      loop:
+        - /usr/local/nginx
+        - /etc/nginx
+
+    - name: Verify permissions
+      shell: |
+        echo "=== Nginx Permissions Check ==="
+        ls -la /usr/local/nginx
+        ls -la /etc/nginx
+      register: perm_check
+      changed_when: false
+
+    - name: Show permissions check
+      debug:
+        var: perm_check.stdout_lines
+  when: stage2_nix
+
+- name: Nginx - bump up ulimit
+  pam_limits:
+    limit_item: nofile
+    limit_type: soft
+    domain: nginx
+    value: "4096"
+  when: stage2_nix
+
+- name: Nginx - create service file
+  template:
+    src: files/nginx.service.j2
+    dest: /etc/systemd/system/nginx.service
+    owner: root
+    group: root
+    mode: '0644'
+  when: stage2_nix
+
+- name: Nginx - reload systemd
+  systemd:
+    daemon_reload: yes
+  when: stage2_nix
+
+- name: Final nginx verification
+  block:
+    - name: Verify nginx setup
+      shell: |
+        echo "=== Final Nginx Verification ==="
+        id nginx
+        getent group nginx
+        ls -la /usr/local/nginx
+        ls -la /etc/nginx
+        test -f /etc/systemd/system/nginx.service || echo "Service file missing"
+      register: final_verify
+      changed_when: false
+
+    - name: Show final verification
+      debug:
+        var: final_verify.stdout_lines
+  when: stage2_nix
+
+# - name: nginx - system user
+#   user: name=nginx
+
+# # Kong installation steps from http://archive.vn/3HRQx
+# - name: nginx - system dependencies
+#   apt:
+#     pkg:
+#       - openssl
+#       - libpcre3-dev
+#       - libssl-dev
+#       - zlib1g-dev
+
+# - name: nginx - download source
+#   get_url:
+#     url: "https://nginx.org/download/nginx-{{ nginx_release }}.tar.gz"
+#     dest: /tmp/nginx-{{ nginx_release }}.tar.gz
+#     checksum: "{{ nginx_release_checksum }}"
+
+# - name: nginx - unpack archive
+#   unarchive:
+#     remote_src: yes
+#     src: /tmp/nginx-{{ nginx_release }}.tar.gz
+#     dest: /tmp
+
+# - name: nginx - configure
+#   shell:
+#     chdir: /tmp/nginx-{{ nginx_release }}
+#     cmd: |
+#       set -e
+
+#       ./configure \
+#       --prefix=/usr/local/nginx \
+#       --conf-path=/etc/nginx/nginx.conf \
+#       --with-http_ssl_module \
+#       --with-http_realip_module \
+#       --with-threads
+#   become: yes
+
+# - name: nginx - build
+#   community.general.make:
+#     target: build
+#     chdir: /tmp/nginx-{{ nginx_release }}
+#     jobs: "{{ parallel_jobs | default(omit) }}"
+#   become: yes
+
+# - name: nginx - install
+#   make:
+#     chdir: /tmp/nginx-{{ nginx_release }}
+#     target: install
+#   become: yes
+
+# - name: nginx - hand over ownership of /usr/local/nginx to user nginx
+#   file:
+#     path: /usr/local/nginx
+#     recurse: yes
+#     owner: nginx
+
+# - name: nginx - hand over ownership of /etc/nginx to user nginx
+#   file:
+#     path: /etc/nginx
+#     recurse: yes
+#     owner: nginx
+
+# # [warn] ulimit is currently set to "1024". For better performance set it to at least
+# # "4096" using "ulimit -n"
+# - name: nginx - bump up ulimit
+#   pam_limits:
+#     limit_item: nofile
+#     limit_type: soft
+#     domain: nginx
+#     value: "4096"
+
+# - name: nginx - create service file
+#   template:
+#     src: files/nginx.service.j2
+#     dest: /etc/systemd/system/nginx.service
+
+# # Keep it dormant for the timebeing
+
+# # - name: nginx - reload systemd
+# #   systemd:
+# #     daemon_reload: yes
+
+'''
+'''--- /postgres/ansible/tasks/test-image.yml ---
+- name: install pg_prove
+  apt:
+    pkg:
+      - libtap-parser-sourcehandler-pgtap-perl
+  when: debpkg_mode
+
+# - name: Temporarily disable PG Sodium references in config
+#   become: yes
+#   become_user: postgres
+#   shell:
+#     cmd: sed -i.bak -e "s/pg_net,\ pgsodium,\ timescaledb/pg_net,\ timescaledb/g" -e "s/pgsodium.getkey_script=/#pgsodium.getkey_script=/g" /etc/postgresql/postgresql.conf
+#   when: debpkg_mode or stage2_nix
+
+- name: Temporarily disable PG Sodium references in config
+  become: yes
+  become_user: postgres
+  shell:
+    cmd: >
+      sed -i.bak
+      -e 's/\(shared_preload_libraries = '\''.*\)pgsodium,\(.*'\''\)/\1\2/'
+      -e 's/pgsodium.getkey_script=/#pgsodium.getkey_script=/'
+      /etc/postgresql/postgresql.conf
+  when: debpkg_mode or stage2_nix
+
+- name: Start Postgres Database to load all extensions.
+  become: yes
+  become_user: postgres
+  shell:
+    cmd: /usr/lib/postgresql/bin/pg_ctl -D /var/lib/postgresql/data start "-o -c config_file=/etc/postgresql/postgresql.conf"
+  when: debpkg_mode
+
+- name: Check if PostgreSQL PID file exists
+  stat:
+    path: /var/lib/postgresql/data/postmaster.pid
+  register: pg_pid_file
+  when: stage2_nix
+
+- name: Stop Postgres Database in stage 2
+  become: yes
+  become_user: postgres
+  shell: |
+    source /var/lib/postgresql/.bashrc && /usr/lib/postgresql/bin/pg_ctl -D /var/lib/postgresql/data stop
+  args:
+    executable: /bin/bash
+  environment:
+    LANG: en_US.UTF-8
+    LANGUAGE: en_US:en
+    LC_ALL: en_US.UTF-8
+    LC_CTYPE: en_US.UTF-8
+    LOCALE_ARCHIVE: /usr/lib/locale/locale-archive
+  when: stage2_nix and pg_pid_file.stat.exists
+
+- name: Check logging.conf existence
+  stat:
+    path: /etc/postgresql/logging.conf
+  register: logging_conf
+- debug:
+    var: logging_conf.stat.exists
+
+- name: Ensure logging configuration file exists at /etc/postgresql/logging.conf
+  copy:
+    src: files/postgresql_config/postgresql-csvlog.conf
+    dest: /etc/postgresql/logging.conf
+    owner: postgres
+    group: postgres
+    mode: '0644'
+  when: debpkg_mode or stage2_nix
+
+
+- name: Start Postgres Database to load all extensions.
+  become: yes
+  become_user: postgres
+  shell: source /var/lib/postgresql/.bashrc &&  /usr/lib/postgresql/bin/pg_ctl -D /var/lib/postgresql/data start "-o -c config_file=/etc/postgresql/postgresql.conf"
+  args:
+    executable: /bin/bash
+  environment:
+    LANG: en_US.UTF-8
+    LANGUAGE: en_US.UTF-8
+    LC_ALL: en_US.UTF-8
+    LC_CTYPE: en_US.UTF-8
+    LOCALE_ARCHIVE: /usr/lib/locale/locale-archive
+  when: stage2_nix
+
+
+- name: Check psql_version and modify migrations if oriole-xx
+  block:
+    - name: Check if psql_version is psql_orioledb-xx
+      set_fact:
+        is_psql_oriole: "{{ psql_version in ['psql_orioledb-16', 'psql_orioledb-17'] }}"
+
+    - name: Remove specified extensions from SQL file
+      ansible.builtin.command:
+        cmd: >
+          sed -i '/\\ir.*\(timescaledb\|postgis\|pgrouting\|plv8\).*\.sql/d' /tmp/migrations/tests/extensions/test.sql
+      when: is_psql_oriole
+      become: yes
+
+    - name: Remove specified extension files from extensions directory
+      ansible.builtin.find:
+        paths: /tmp/migrations/tests/extensions
+        patterns: 
+          - '*timescaledb*.sql'
+          - '*plv8*.sql'
+          - '*postgis*.sql'
+          - '*pgrouting*.sql'
+      register: files_to_remove
+      when: is_psql_oriole
+
+    - name: Delete matched extension files
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ files_to_remove.files }}"
+      when: is_psql_oriole
+      become: yes
+
+- name: Run Unit tests (with filename unit-test-*) on Postgres Database
+  shell: /usr/bin/pg_prove -U postgres -h localhost -d postgres -v /tmp/unit-tests/unit-test-*.sql
+  register: retval
+  failed_when: retval.rc != 0
+  when: debpkg_mode or stage2_nix
+
+- name: Run migrations tests
+  shell: /usr/bin/pg_prove -U supabase_admin -h localhost -d postgres -v tests/test.sql
+  register: retval
+  failed_when: retval.rc != 0
+  when: debpkg_mode or stage2_nix
+  args:
+    chdir: /tmp/migrations
+
+- name: Re-enable PG Sodium references in config
+  become: yes
+  become_user: postgres
+  shell:
+    cmd: mv /etc/postgresql/postgresql.conf.bak /etc/postgresql/postgresql.conf
+  when: debpkg_mode or stage2_nix
+
+- name: Reset db stats
+  shell: /usr/lib/postgresql/bin/psql --no-password --no-psqlrc -d postgres -h localhost -U supabase_admin -c 'SELECT pg_stat_statements_reset(); SELECT pg_stat_reset();'
+  when: debpkg_mode or stage2_nix
+
+- name: remove pg_prove
+  apt:
+    pkg:
+      - libtap-parser-sourcehandler-pgtap-perl
+    state: absent
+    autoremove: yes
+  when: debpkg_mode
+
+- name: Stop Postgres Database
+  become: yes
+  become_user: postgres
+  shell:
+    cmd: /usr/lib/postgresql/bin/pg_ctl -D /var/lib/postgresql/data stop
+  when: debpkg_mode or stage2_nix
+
+'''
+'''--- /postgres/ansible/tasks/finalize-ami.yml ---
+- name: PG logging conf
+  template:
+    src: files/postgresql_config/postgresql-csvlog.conf
+    dest: /etc/postgresql/logging.conf
+    group: postgres
+
+- name: UFW - Allow SSH connections
+  ufw:
+    rule: allow
+    name: OpenSSH
+
+- name: UFW - Allow connections to postgreSQL (5432)
+  ufw:
+    rule: allow
+    port: "5432"
+
+- name: UFW - Allow connections to postgreSQL (6543)
+  ufw:
+    rule: allow
+    port: "6543"
+  tags:
+    - install-pgbouncer
+
+- name: UFW - Allow connections to http (80)
+  ufw:
+    rule: allow
+    port: http
+  tags:
+  - install-supabase-internal 
+
+- name: UFW - Allow connections to https (443)
+  ufw:
+    rule: allow
+    port: https
+  tags:
+  - install-supabase-internal 
+
+- name: UFW - Deny all other incoming traffic by default
+  ufw:
+    state: enabled
+    policy: deny
+    direction: incoming
+
+- name: Move logrotate files to /etc/logrotate.d/
+  copy:
+    src: "files/logrotate_config/{{ item.file }}"
+    dest: "/etc/logrotate.d/{{ item.file }}"
+    mode: "0700"
+    owner: root
+  loop:
+    - { file: "logrotate-postgres-csv.conf" }
+    - { file: "logrotate-postgres.conf" }
+    - { file: "logrotate-walg.conf" }
+    - { file: "logrotate-postgres-auth.conf" }
+
+- name: Ensure default Postgres logrotate config is removed
+  file:
+    path: /etc/logrotate.d/postgresql-common
+    state: absent
+
+- name: Disable cron access
+  copy:
+    src: files/cron.deny
+    dest: /etc/cron.deny
+
+- name: Configure logrotation to run every hour
+  shell:
+    cmd: |
+        cp  /usr/lib/systemd/system/logrotate.timer /etc/systemd/system/logrotate.timer
+        sed -i -e 's;daily;*:0/5;' /etc/systemd/system/logrotate.timer
+        systemctl reenable logrotate.timer
+  become: yes
+
+- name: import pgsodium_getkey script
+  template:
+    src: files/pgsodium_getkey_readonly.sh.j2
+    dest: "{{ pg_bindir }}/pgsodium_getkey.sh"
+    owner: postgres
+    group: postgres
+    mode: 0700
+  when: debpkg_mode or stage2_nix
+
+'''
+'''--- /postgres/ansible/tasks/setup-wal-g.yml ---
+# Dependencies
+- name: Install git and WAL-G dependencies
+  apt:
+    pkg:
+      - git
+      - libbrotli-dev
+      - liblzo2-dev
+      - libsodium-dev
+      - cmake
+      - pkg-config  # Add this
+      - build-essential
+      - libsodium23  # Add this
+    state: present
+  when: stage2_nix
+
+# Go installation
+- name: Install Go for WAL-G
+  block:
+    - name: Download Go
+      get_url:
+        url: "https://golang.org/dl/go{{ golang_version }}.linux-{{ platform }}.tar.gz"
+        dest: /tmp
+        checksum: "{{ golang_version_checksum[platform] }}"
+        timeout: 60
+
+    - name: Unpack Go archive
+      unarchive:
+        remote_src: yes
+        src: "/tmp/go{{ golang_version }}.linux-{{ platform }}.tar.gz"
+        dest: /usr/local
+  when: stage2_nix
+
+- name: Verify Go installation
+  shell: |
+    export PATH=$PATH:/usr/local/go/bin
+    go version
+  register: go_check
+  failed_when: go_check.rc != 0
+  when: stage2_nix
+
+- name: Show Go version
+  debug:
+    var: go_check.stdout_lines
+  when: stage2_nix
+
+
+- name: Build WAL-G
+  block:
+    - name: Clean build directory
+      file:
+        path: /tmp/wal-g
+        state: absent
+
+    - name: Clone WAL-G
+      git:
+        repo: https://github.com/wal-g/wal-g.git
+        dest: /tmp/wal-g
+        version: "v{{ wal_g_release }}"
+        depth: 1
+
+    - name: Debug directory structure
+      shell: |
+        echo "=== Directory Structure ==="
+        ls -la /tmp/wal-g
+        echo "=== Main Directory ==="
+        ls -la /tmp/wal-g/main
+        echo "=== CMD Directory ==="
+        ls -la /tmp/wal-g/cmd
+      register: dir_check
+      ignore_errors: yes
+
+    - name: Build WAL-G
+      shell: |
+        cd /tmp/wal-g
+        export PKG_CONFIG_PATH="/usr/lib/pkgconfig"
+        export CGO_ENABLED=1
+        export USE_LIBSODIUM=true
+        export PATH=$PATH:/usr/local/go/bin
+        export GO111MODULE=on
+
+        # Initialize modules
+        go mod init github.com/wal-g/wal-g
+        go mod tidy
+        
+        go build -tags postgresql \
+          -ldflags "-X main.buildDate=`date -u +%Y.%m.%d_%H:%M:%S` -X main.gitRevision=`git rev-parse --short HEAD`" \
+          -o /usr/local/bin/wal-g \
+          ./cmd/pg
+
+      environment:
+        GOBIN: "/usr/local/bin"
+        CGO_ENABLED: "1"
+        USE_LIBSODIUM: "true"
+        GO111MODULE: "on"
+      register: build_result
+
+    - name: Show build output
+      debug:
+        var: build_result
+
+    - name: Verify WAL-G installation
+      shell: |
+        which wal-g || echo "wal-g not found"
+        if [ -f /usr/local/bin/wal-g ]; then
+          echo "wal-g binary exists"
+          ls -l /usr/local/bin/wal-g
+        fi
+      register: verify_result
+      changed_when: false
+
+  when: stage2_nix
+  rescue:
+    - name: Show detailed error information
+      debug:
+        msg: 
+          - "Build failed with following details:"
+          - "Return code: {{ build_result.rc | default('unknown') }}"
+          - "Stdout: {{ build_result.stdout | default('') }}"
+          - "Stderr: {{ build_result.stderr | default('') }}"
+      when: build_result is defined
+
+    - name: Check Go environment
+      shell: |
+        echo "=== Go Environment ==="
+        go env
+        echo "=== Go Version ==="
+        go version
+      register: go_env
+      ignore_errors: yes
+
+    - name: Show Go environment
+      debug:
+        var: go_env
+      when: go_env is defined
+
+    - fail:
+        msg: "WAL-G build failed. See above logs for details."
+
+
+- name: Verify libsodium installation
+  shell: |
+    pkg-config --libs libsodium
+    ldconfig -p | grep libsodium
+  register: libsodium_check
+  changed_when: false
+  when: stage2_nix
+
+- name: Show libsodium status
+  debug:
+    var: libsodium_check.stdout_lines
+  when: stage2_nix
+
+# User and group setup
+- name: WAL-G user and group setup
+  block:
+    - name: Create WAL-G group
+      group:
+        name: wal-g
+        state: present
+        system: yes
+
+    - name: Create WAL-G user
+      user:
+        name: wal-g
+        shell: /bin/false
+        comment: WAL-G user
+        group: wal-g
+        system: yes
+
+    - name: Add WAL-G to postgres group
+      user:
+        name: wal-g
+        groups: postgres
+        append: yes
+
+# Configuration setup
+- name: WAL-G configuration
+  block:
+    - name: Create WAL-G directories
+      file:
+        path: "{{ item.path }}"
+        state: "{{ item.state }}"
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - { path: '/etc/wal-g', state: 'directory', owner: 'wal-g', group: 'wal-g', mode: '0770' }
+        - { path: '/etc/wal-g/config.json', state: 'touch', owner: 'wal-g', group: 'wal-g', mode: '0664' }
+
+    - name: Configure WAL-G
+      template:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        mode: "{{ item.mode }}"
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+      loop:
+        - { src: 'files/postgresql_config/custom_walg.conf.j2', dest: '/etc/postgresql-custom/wal-g.conf', mode: '0664', owner: 'postgres', group: 'postgres' }
+        - { src: 'files/walg_helper_scripts/wal_fetch.sh', dest: '/home/postgres/wal_fetch.sh', mode: '0500', owner: 'postgres', group: 'postgres' }
+        - { src: 'files/walg_helper_scripts/wal_change_ownership.sh', dest: '/root/wal_change_ownership.sh', mode: '0700', owner: 'root', group: 'root' }
+  when: stage2_nix
+
+# Configuration updates
+- name: Update PostgreSQL configuration
+  replace:
+    path: /etc/postgresql/postgresql.conf
+    regexp: "#include = '/etc/postgresql-custom/wal-g.conf'"
+    replace: "include = '/etc/postgresql-custom/wal-g.conf'"
+  when: stage2_nix
+
+# Cleanup
+- name: Cleanup Go installation
+  file:
+    path: /usr/local/go
+    state: absent
+  when: stage2_nix
+
+# # Downloading dependencies
+# - name: wal-g dependencies
+#   become: yes
+#   apt:
+#     pkg:
+#       - libbrotli-dev
+#       - liblzo2-dev
+#       - libsodium-dev
+#       - cmake
+
+# # install go dependency for WAL-G
+# - name: wal-g go dependency
+#   get_url:
+#     url: "https://golang.org/dl/go{{ golang_version }}.linux-{{ platform }}.tar.gz"
+#     dest: /tmp
+#     checksum: "{{ golang_version_checksum[platform] }}"
+#     timeout: 60
+
+# - name: unpack go archive
+#   unarchive:
+#     remote_src: yes
+#     src: "/tmp/go{{ golang_version }}.linux-{{ platform }}.tar.gz"
+#     dest: /usr/local
+
+# # Download WAL-G
+# - name: wal-g - download latest version
+#   git:
+#     repo: https://github.com/wal-g/wal-g.git
+#     dest: /tmp/wal-g
+#     version: "v{{ wal_g_release }}"
+#   become: yes
+
+# - name: wal-g - pg_clean
+#   make:
+#     chdir: /tmp/wal-g
+#     target: pg_clean
+#     params:
+#       GOBIN: "/usr/local/bin"
+#       PATH: "{{ ansible_env.PATH }}:/usr/local/go/bin"
+#       USE_LIBSODIUM: true
+#   become: yes
+#   ignore_errors: yes
+
+# - name: wal-g - deps
+#   make:
+#     chdir: /tmp/wal-g
+#     target: deps
+#     params:
+#       GOBIN: "/usr/local/bin"
+#       PATH: "{{ ansible_env.PATH }}:/usr/local/go/bin"
+#       USE_LIBSODIUM: true
+#   become: yes
+#   ignore_errors: yes
+
+# - name: wal-g - build and install
+#   community.general.make:
+#     chdir: /tmp/wal-g
+#     target: pg_install
+#     jobs: "{{ parallel_jobs | default(omit) }}"
+#     params:
+#       GOBIN: "/usr/local/bin"
+#       PATH: "{{ ansible_env.PATH }}:/usr/local/go/bin"
+#       USE_LIBSODIUM: true
+#   become: yes
+
+# - name: Create wal-g group
+#   group:
+#     name: wal-g
+#     state: present
+
+# - name: Create wal-g user
+#   user:
+#     name: wal-g
+#     shell: /bin/false
+#     comment: WAL-G user
+#     group: wal-g
+#     groups: wal-g, postgres
+
+# - name: Create a config directory owned by wal-g
+#   file:
+#     path: /etc/wal-g
+#     state: directory
+#     owner: wal-g
+#     group: wal-g
+#     mode: '0770'
+
+# - name: Create /etc/wal-g/config.json
+#   file:
+#     path: /etc/wal-g/config.json
+#     state: touch
+#     owner: wal-g
+#     group: wal-g
+#     mode: '0664'
+
+# - name: Move custom wal-g.conf file to /etc/postgresql-custom/wal-g.conf
+#   template:
+#     src: "files/postgresql_config/custom_walg.conf.j2"
+#     dest: /etc/postgresql-custom/wal-g.conf
+#     mode: 0664
+#     owner: postgres
+#     group: postgres
+
+# - name: Add script to be run for restore_command
+#   template:
+#     src: "files/walg_helper_scripts/wal_fetch.sh"
+#     dest: /home/postgres/wal_fetch.sh
+#     mode: 0500
+#     owner: postgres
+#     group: postgres
+
+# - name: Add helper script for wal_fetch.sh
+#   template:
+#     src: "files/walg_helper_scripts/wal_change_ownership.sh"
+#     dest: /root/wal_change_ownership.sh
+#     mode: 0700
+#     owner: root
+
+# - name: Include /etc/postgresql-custom/wal-g.conf in postgresql.conf
+#   become: yes
+#   replace:
+#     path: /etc/postgresql/postgresql.conf
+#     regexp: "#include = '/etc/postgresql-custom/wal-g.conf'"
+#     replace: "include = '/etc/postgresql-custom/wal-g.conf'"
+
+# # Clean up Go
+# - name: Uninstall Go
+#   become: yes
+#   file:
+#     path: /usr/local/go
+#     state: absent
+
+'''
+'''--- /postgres/ansible/tasks/stage2-setup-postgres.yml ---
+# - name: Install openjdk11 for pljava from nix binary cache
+#   become: yes
+#   shell: |
+#     sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile install nixpkgs#openjdk11"
+# It was decided to leave pljava disabled at https://github.com/supabase/postgres/pull/690 therefore removing this task
+
+- name: Check psql_version and modify supautils.conf and postgresql.conf if necessary
+  block:
+    - name: Check if psql_version is psql_orioledb-16
+      set_fact:
+        is_psql_oriole: "{{ psql_version in ['psql_orioledb-16', 'psql_orioledb-17'] }}"
+
+    - name: Remove specified extensions from postgresql.conf if oriole-16 build
+      ansible.builtin.command:
+        cmd: >
+          sed -i 's/ timescaledb,//g' 
+          /etc/postgresql/postgresql.conf
+      when: is_psql_oriole and stage2_nix
+      become: yes
+
+    - name: Remove specified extensions from supautils.conf if oriole-16 build
+      ansible.builtin.command:
+        cmd: >
+          sed -i 's/ timescaledb,//g; s/ vector,//g; s/ plv8,//g; s/ postgis,//g; s/ pgrouting,//g' 
+          /etc/postgresql-custom/supautils.conf
+      when: is_psql_oriole and stage2_nix
+      become: yes
+
+    - name: Remove db_user_namespace from postgresql.conf if oriole-xx build
+      ansible.builtin.command:
+        cmd: >
+          sed -i 's/db_user_namespace = off/#db_user_namespace = off/g;' 
+          /etc/postgresql/postgresql.conf
+      when: is_psql_oriole and stage2_nix
+      become: yes
+
+    - name: Append orioledb to shared_preload_libraries append within closing quote
+      ansible.builtin.command:
+        cmd: >
+          sed -i 's/\(shared_preload_libraries.*\)'\''\(.*\)$/\1, orioledb'\''\2/'
+          /etc/postgresql/postgresql.conf
+      when: is_psql_oriole and stage2_nix
+      become: yes
+
+    - name: Add default_table_access_method setting
+      ansible.builtin.lineinfile:
+        path: /etc/postgresql/postgresql.conf
+        line: "default_table_access_method = 'orioledb'"
+        state: present
+      when: is_psql_oriole and stage2_nix
+      become: yes
+    
+    - name: Add ORIOLEDB_ENABLED environment variable
+      ansible.builtin.lineinfile:
+        path: /etc/environment
+        line: 'ORIOLEDB_ENABLED=true'
+      when: is_psql_oriole and stage2_nix
+      become: yes
+
+- name: Ensure /tmp/ansible-playbook is writable by postgres
+  become: yes
+  file:
+    path: /tmp/ansible-playbook
+    owner: postgres
+    group: postgres
+    mode: '0755'
+    recurse: yes
+  when: stage2_nix
+
+- name: Debug supabase-groonga.nix contents
+  become: yes
+  shell: |
+    cat /tmp/ansible-playbook/nix/supabase-groonga.nix || echo "File not found"
+    ls -l /tmp/ansible-playbook/nix/
+    sha256sum /tmp/ansible-playbook/nix/supabase-groonga.nix || echo "Checksum failed"
+  when: stage2_nix
+  register: groonga_debug
+- debug:
+    var: groonga_debug.stdout_lines
+  when: stage2_nix
+
+- name: Install Postgres from local flake
+  become: yes
+  shell: |
+    sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile install /tmp/ansible-playbook#postgresql_15"
+  when: stage2_nix
+  register: install_postgres
+  retries: 3
+  delay: 5
+  until: install_postgres.rc == 0
+
+- name: Debug Nix profile contents
+  become: yes
+  shell: |
+    sudo -u postgres bash -c "ls -l /var/lib/postgresql/.nix-profile"
+    sudo -u postgres bash -c "ls -l /var/lib/postgresql/.nix-profile/lib || true"
+    sudo -u postgres bash -c "ls -l /var/lib/postgresql/.nix-profile/include || true"
+  when: stage2_nix
+  register: nix_profile_debug
+- debug:
+    var: nix_profile_debug.stdout_lines
+  when: stage2_nix
+
+- name: Ensure PostgreSQL include subdirectories exist
+  file:
+    path: /usr/lib/postgresql/include/server
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: '0755'
+  when: stage2_nix
+
+- name: Create ARM64 specific symlinks
+  file:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    state: link
+    force: yes
+  with_items:
+    - { src: "/var/lib/postgresql/.nix-profile/lib", dest: "/usr/lib/postgresql/lib" }
+    - { src: "/var/lib/postgresql/.nix-profile/include", dest: "/usr/lib/postgresql/include" }
+  become: yes
+  when: stage2_nix
+
+- name: Create symlinks for PostgreSQL headers
+  file:
+    src: "{{ item }}"
+    dest: "/usr/lib/postgresql/include/server/{{ item | basename }}"
+    state: link
+  with_fileglob:
+    - "/var/lib/postgresql/.nix-profile/include/*.h"
+  become: yes
+  when: stage2_nix
+
+- name: Install pg_prove from nix binary cache
+  become: yes
+  shell: |
+    sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile install github:supabase/postgres/{{ git_commit_sha }}#pg_prove"
+  when: stage2_nix
+
+- name: Install supabase-groonga from nix binary cache
+  become: yes
+  shell: |
+    sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile install github:supabase/postgres/{{ git_commit_sha }}#supabase_groonga"
+  when: stage2_nix and ansible_architecture != 'aarch64'
+
+- name: Skip supabase-groonga on ARM
+  debug:
+    msg: "Skipping supabase-groonga installation on ARM architecture"
+  when: stage2_nix and ansible_architecture == 'aarch64'
+
+- name: Configure ARM-specific settings
+  set_fact:
+    platform_specific_paths:
+      lib_dir: "/lib/aarch64-linux-gnu"
+      include_dir: "/usr/include/aarch64-linux-gnu"
+  when: ansible_architecture == 'arm64'
+
+# - name: Set up PostgreSQL directories for ARM64
+#   file:
+#     path: "{{ item }}"
+#     state: directory
+#     owner: postgres
+#     group: postgres
+#     mode: '0755'
+#   with_items:
+#     - "/usr/lib/postgresql/bin"
+#     - "/usr/lib/postgresql/lib"
+#     - "/usr/lib/postgresql/include"
+#     - "/usr/lib/postgresql/share"
+#   when: stage2_nix
+
+# - name: Ensure required PostgreSQL directories exist
+#   file:
+#     path: "{{ item }}"
+#     state: directory
+#     owner: postgres
+#     group: postgres
+#     mode: '0755'
+#   with_items:
+#     - "/usr/lib/postgresql/bin"
+#     - "/usr/lib/postgresql/share"
+#   when: stage2_nix
+
+- name: Create ARM64 specific symlinks
+  file:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    state: link
+  with_items:
+    - { src: "/var/lib/postgresql/.nix-profile/lib/aarch64-linux-gnu", dest: "/usr/lib/postgresql/lib" }
+    - { src: "/var/lib/postgresql/.nix-profile/include", dest: "/usr/lib/postgresql/include" }
+  when: stage2_nix
+
+- name: Install debug symbols for postgres version
+  become: yes
+  shell: |
+    sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile install github:supabase/postgres/{{ git_commit_sha }}#{{postgresql_version}}_debug"
+  when: stage2_nix
+
+- name: Install source files for postgresql version
+  become: yes
+  shell: |
+    sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile install github:supabase/postgres/{{ git_commit_sha }}#{{postgresql_version}}_src"
+  when: stage2_nix
+  
+- name: Set ownership and permissions for /etc/ssl/private
+  become: yes
+  file:
+    path: /etc/ssl/private
+    owner: root
+    group: postgres
+    mode: '0750'
+  when: stage2_nix
+
+- name: Set permissions for postgresql.env
+  become: yes
+  file:
+    path: /etc/environment.d/postgresql.env
+    owner: postgres
+    group: postgres
+    mode: '0644'
+  when: stage2_nix
+
+- name: Ensure /usr/lib/postgresql/bin directory exists
+  file:
+    path: /usr/lib/postgresql/bin
+    state: directory
+    owner: postgres
+    group: postgres
+  when: stage2_nix
+
+- name: Ensure /usr/lib/postgresql/share directory exists
+  file:
+    path: /usr/lib/postgresql/share/postgresql
+    state: directory
+    owner: postgres
+    group: postgres
+  when: stage2_nix
+
+- name: Ensure /usr/lib/postgresql/share/contrib directory exists
+  file:
+    path: /usr/lib/postgresql/share/postgresql/contrib
+    state: directory
+    owner: postgres
+    group: postgres
+  when: stage2_nix
+
+- name: Ensure /usr/lib/postgresql/share/timezonesets directory exists
+  file:
+    path: /usr/lib/postgresql/share/postgresql/timezonesets
+    state: directory
+    owner: postgres
+    group: postgres
+  when: stage2_nix
+
+- name: Ensure /usr/lib/postgresql/share/tsearch_data directory exists
+  file:
+    path: /usr/lib/postgresql/share/postgresql/tsearch_data
+    state: directory
+    owner: postgres
+    group: postgres
+  when: stage2_nix
+
+- name: Ensure /usr/lib/postgresql/share/extension directory exists
+  file:
+    path: /usr/lib/postgresql/share/postgresql/extension
+    state: directory
+    owner: postgres
+    group: postgres
+  when: stage2_nix
+
+# - name: Ensure /usr/lib/postgresql/share/postgresql/pljava directory exists
+#   file:
+#     path: /usr/lib/postgresql/share/postgresql/pljava
+#     state: directory
+#     owner: postgres
+#     group: postgres
+#   when: stage2_nix
+# It was decided to leave pljava disabled at https://github.com/supabase/postgres/pull/690 therefore removing this task
+
+- name: import pgsodium_getkey script
+  template:
+    src: /tmp/ansible-playbook/ansible/files/pgsodium_getkey_readonly.sh.j2
+    dest: "/usr/lib/postgresql/bin/pgsodium_getkey.sh"
+    owner: postgres
+    group: postgres
+    mode: 0700
+  when: stage2_nix
+
+- name: Create symbolic links from /var/lib/postgresql/.nix-profile/bin to /usr/lib/postgresql/bin
+  file:
+    src: "{{ item }}"
+    dest: "/usr/lib/postgresql/bin/{{ item | basename }}"
+    state: link
+  with_fileglob:
+    - "/var/lib/postgresql/.nix-profile/bin/*"
+  become: yes
+  when: stage2_nix
+
+- name: Check if /usr/bin/pg_config exists
+  stat:
+    path: /usr/bin/pg_config
+  register: pg_config_stat
+  when: stage2_nix
+
+- name: Remove existing /usr/bin/pg_config if it is not a symlink
+  file:
+    path: /usr/bin/pg_config
+    state: absent
+  when: pg_config_stat.stat.exists and not pg_config_stat.stat.islnk and stage2_nix
+  become: yes
+
+- name: Create symbolic links from /var/lib/postgresql/.nix-profile/bin to /usr/bin
+  file:
+    src: "{{ item }}"
+    dest: "/usr/bin/{{ item | basename }}"
+    state: link
+  with_fileglob:
+    - "/var/lib/postgresql/.nix-profile/bin/*"
+  become: yes
+  when: stage2_nix
+
+- name: Ensure postgres user has ownership of symlink
+  file:
+    path: "/usr/bin/{{ item | basename }}"
+    owner: postgres
+    group: postgres
+  with_fileglob:
+    - "/var/lib/postgresql/.nix-profile/bin/*"
+  become: yes
+  when: stage2_nix
+
+# - name: Create symbolic links from /var/lib/postgresql/.nix-profile/share/pljava to /usr/lib/postgresql/share/postgresql/pljava
+#   file:
+#     src: "{{ item }}"
+#     dest: "/usr/lib/postgresql/share/postgresql/pljava/{{ item | basename }}"
+#     state: link
+#   with_fileglob:
+#     - "/var/lib/postgresql/.nix-profile/share/pljava/*"
+#   become: yes
+# It was decided to leave pljava disabled at https://github.com/supabase/postgres/pull/690 therefore removing this task
+
+- name: Create symbolic links from /var/lib/postgresql/.nix-profile/share/postgresql to /usr/lib/postgresql/share/postgresql
+  file:
+    src: "{{ item }}"
+    dest: "/usr/lib/postgresql/share/postgresql/{{ item | basename }}"
+    state: link
+  with_fileglob:
+    - "/var/lib/postgresql/.nix-profile/share/postgresql/*"
+  become: yes
+  when: stage2_nix
+
+- name: Create symbolic links from /var/lib/postgresql/.nix-profile/share/postgresql/extension to /usr/lib/postgresql/share/postgresql/extension
+  file:
+    src: "{{ item }}"
+    dest: "/usr/lib/postgresql/share/postgresql/extension/{{ item | basename }}"
+    state: link
+  with_fileglob:
+    - "/var/lib/postgresql/.nix-profile/share/postgresql/extension/*"
+  become: yes
+  when: stage2_nix
+
+- name: create destination directory
+  file:
+    path: /usr/lib/postgresql/share/postgresql/contrib/
+    state: directory
+    recurse: yes
+  when: stage2_nix
+
+- name: Check psql_version and run postgis linking if not oriole-xx
+  block:
+    - name: Check if psql_version is psql_orioledb-17
+      set_fact:
+        is_psql_oriole: "{{ psql_version == 'psql_orioledb-17' }}"
+
+    - name: Recursively create symbolic links and set permissions for the contrib/postgis-* dir
+      shell: >
+        sudo mkdir -p /usr/lib/postgresql/share/postgresql/contrib && \
+        sudo find /var/lib/postgresql/.nix-profile/share/postgresql/contrib/ -mindepth 1 -type d -exec sh -c 'for dir do sudo ln -s "$dir" "/usr/lib/postgresql/share/postgresql/contrib/$(basename "$dir")"; done' sh {} + \
+        && chown -R postgres:postgres "/usr/lib/postgresql/share/postgresql/contrib/"
+      become: yes
+      when: stage2_nix and not is_psql_oriole
+
+- name: Create symbolic links from /var/lib/postgresql/.nix-profile/share/postgresql/timezonesets to /usr/lib/postgresql/share/postgresql/timeszonesets
+  file:
+    src: "{{ item }}"
+    dest: "/usr/lib/postgresql/share/postgresql/timezonesets/{{ item | basename }}"
+    state: link
+  with_fileglob:
+    - "/var/lib/postgresql/.nix-profile/share/postgresql/timezonesets/*"
+  become: yes
+  when: stage2_nix
+
+- name: Create symbolic links from /var/lib/postgresql/.nix-profile/share/postgresql/tsearch_data to /usr/lib/postgresql/share/postgresql/tsearch_data
+  file:
+    src: "{{ item }}"
+    dest: "/usr/lib/postgresql/share/postgresql/tsearch_data/{{ item | basename }}"
+    state: link
+  with_fileglob:
+    - "/var/lib/postgresql/.nix-profile/share/postgresql/tsearch_data/*"
+  become: yes
+  when: stage2_nix
+
+- set_fact:
+    pg_bindir: "/usr/lib/postgresql/bin"
+  when: stage2_nix
+
+- name: pgsodium - set pgsodium.getkey_script
+  become: yes
+  lineinfile:
+    path: /etc/postgresql/postgresql.conf
+    state: present
+    # script is expected to be placed by finalization tasks for different target platforms
+    line: pgsodium.getkey_script= '{{ pg_bindir }}/pgsodium_getkey.sh'
+  when: stage2_nix
+
+- name: Create symbolic link for pgsodium_getkey script
+  file:
+    src: "/usr/lib/postgresql/bin/pgsodium_getkey.sh"
+    dest: "/usr/lib/postgresql/share/postgresql/extension/pgsodium_getkey"
+    state: link
+  become: yes
+  when: stage2_nix
+
+- name: Append GRN_PLUGINS_DIR to /etc/environment.d/postgresql.env
+  ansible.builtin.lineinfile:
+    path: /etc/environment.d/postgresql.env
+    line: 'GRN_PLUGINS_DIR=/var/lib/postgresql/.nix-profile/lib/groonga/plugins'
+  become: yes
+
+'''
+'''--- /postgres/ansible/tasks/setup-gotrue.yml ---
+# Group creation first
+- name: Gotrue - create group
+  group:
+    name: gotrue
+    state: present
+    system: yes
+  when: stage2_nix
+
+# Then user creation with proper group
+- name: Gotrue - system user
+  user:
+    name: gotrue
+    system: yes
+    group: gotrue
+    shell: /bin/false
+    create_home: no
+  when: stage2_nix
+
+- name: UFW - Allow connections to GoTrue metrics exporter
+  ufw:
+    rule: allow
+    port: "9122"
+  when: stage2_nix
+
+- name: Setting arch (x86)
+  set_fact:
+    arch: "x86"
+  when: platform == "amd64"
+
+- name: Setting arch (arm)
+  set_fact:
+    arch: "arm64"
+  when: platform == "arm64"
+
+- name: gotrue - download commit archive
+  get_url:
+    url: "https://github.com/supabase/gotrue/releases/download/v{{ gotrue_release }}/auth-v{{ gotrue_release }}-{{ arch }}.tar.gz"
+    dest: /tmp/gotrue.tar.gz
+    checksum: "{{ gotrue_release_checksum }}"
+  when: stage2_nix
+
+- name: gotrue - create /opt/gotrue
+  file:
+    path: /opt/gotrue
+    state: directory
+    owner: gotrue
+    group: gotrue
+    mode: 0775
+  when: stage2_nix
+
+- name: gotrue - unpack archive in /opt/gotrue
+  unarchive:
+    remote_src: yes
+    src: /tmp/gotrue.tar.gz
+    dest: /opt/gotrue
+    owner: gotrue
+    group: gotrue
+  when: stage2_nix
+
+- name: Verify gotrue user and group setup
+  block:
+    - name: Check gotrue user and group existence
+      shell: |
+        echo "=== GoTrue User/Group Verification ==="
+        id gotrue
+        echo "Group details:"
+        getent group gotrue
+      register: gotrue_verify
+      changed_when: false
+
+    - name: Display verification results
+      debug:
+        var: gotrue_verify.stdout_lines
+  when: stage2_nix
+
+- name: gotrue - create service file
+  template:
+    src: files/gotrue.service.j2
+    dest: /etc/systemd/system/gotrue.service
+  when: stage2_nix
+
+- name: gotrue - create optimizations file
+  template:
+    src: files/gotrue-optimizations.service.j2
+    dest: /etc/systemd/system/gotrue-optimizations.service
+  when: stage2_nix
+
+- name: gotrue - reload systemd
+  systemd:
+    daemon_reload: yes
+  when: stage2_nix
+'''
+'''--- /postgres/ansible/tasks/setup-supabase-internal.yml ---
+- name: AWS CLI dep
+  apt:
+    pkg:
+      - unzip
+      - jq
+    install_recommends: no
+
+- name: AWS CLI (arm)
+  get_url:
+    url: "https://awscli.amazonaws.com/awscli-exe-linux-aarch64-{{ aws_cli_release }}.zip"
+    dest: "/tmp/awscliv2.zip"
+    timeout: 60
+  when: platform == "arm64"
+
+- name: AWS CLI (x86)
+  get_url:
+    url: "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-{{ aws_cli_release }}.zip"
+    dest: "/tmp/awscliv2.zip"
+    timeout: 60
+  when: platform == "amd64"
+
+- name: AWS CLI - expand
+  unarchive:
+    remote_src: yes
+    src: "/tmp/awscliv2.zip"
+    dest: "/tmp"
+
+- name: AWS CLI - install
+  shell: "/tmp/aws/install --update"
+  become: true
+
+- name: AWS CLI - configure ipv6 support for s3
+  shell: |
+    aws configure set default.s3.use_dualstack_endpoint true
+
+- name: install Vector for logging
+  become: yes
+  apt:
+    deb: "{{ vector_x86_deb }}"
+  when: platform == "amd64"
+
+- name: install Vector for logging
+  become: yes
+  apt:
+    deb: "{{ vector_arm_deb }}"
+  when: platform == "arm64"
+
+- name: add Vector to postgres group
+  become: yes
+  shell:
+    cmd: |
+      usermod -a -G postgres vector
+
+- name: create service files for Vector
+  template:
+    src: files/vector.service.j2
+    dest: /etc/systemd/system/vector.service
+
+- name: configure tmpfiles for postgres - overwrites upstream package
+  template:
+    src: files/postgresql_config/tmpfiles.postgresql.conf
+    dest: /etc/tmpfiles.d/postgresql-common.conf
+
+- name: fix permissions for vector config to be managed
+  shell:
+    cmd: |
+      chown -R vector:vector /etc/vector
+      chmod 0775 /etc/vector
+
+- name: vector - reload systemd
+  systemd:
+    daemon_reload: yes
+
+- name: Create checkpoints dir
+  become: yes
+  file:
+    path: /var/lib/vector
+    state: directory
+    owner: vector
+
+- name: Include file for generated optimizations in postgresql.conf
+  become: yes
+  replace:
+    path: /etc/postgresql/postgresql.conf
+    regexp: "#include = '/etc/postgresql-custom/generated-optimizations.conf'"
+    replace: "include = '/etc/postgresql-custom/generated-optimizations.conf'"
+
+- name: Include file for custom overrides in postgresql.conf
+  become: yes
+  replace:
+    path: /etc/postgresql/postgresql.conf
+    regexp: "#include = '/etc/postgresql-custom/custom-overrides.conf'"
+    replace: "include = '/etc/postgresql-custom/custom-overrides.conf'"
+
+- name: Install Postgres exporter
+  import_tasks: internal/postgres-exporter.yml
+
+- name: Install admin-mgr
+  import_tasks: internal/admin-mgr.yml
+
+- name: Install adminapi
+  import_tasks: internal/admin-api.yml
+
+- name: Init nftabless
+  import_tasks: internal/setup-nftables.yml
+
+- name: Install pg_egress_collect
+  import_tasks: internal/pg_egress_collect.yml
+
+- name: Install PostgreSQL prestart script
+  import_tasks: internal/postgresql-prestart.yml
+
+- name: Install salt minion
+  import_tasks: internal/install-salt.yml
+  tags:
+    - aws-only
+
+- name: Envoy - use lds.supabase.yaml for /etc/envoy/lds.yaml
+  command: mv /etc/envoy/lds.supabase.yaml /etc/envoy/lds.yaml
+
+'''
+'''--- /postgres/ansible/tasks/setup-postgres.yml ---
+- name: Debug - PostgreSQL pre-setup
+  shell: |
+    echo "=== System State ==="
+    echo "Groups:"
+    getent group postgres ssl-cert || echo "Groups not found"
+    echo "====="
+  register: pre_postgres_debug
+  changed_when: false
+
+- name: Show PostgreSQL pre-setup debug
+  debug:
+    var: pre_postgres_debug.stdout_lines
+
+- name: Postgres - copy package
+  copy:
+    src: files/postgres/
+    dest: /tmp/build/
+  when: debpkg_mode
+
+- name: Postgres - add PPA
+  apt_repository:
+    repo: "deb [ trusted=yes ] file:///tmp/build ./"
+    state: present
+  when: debpkg_mode
+
+- name: Postgres - install commons
+  apt:
+    name: postgresql-common
+    install_recommends: no
+  when: debpkg_mode
+
+- name: Do not create main cluster
+  shell:
+    cmd: sed -ri 's/#(create_main_cluster) .*$/\1 = false/' /etc/postgresql-common/createcluster.conf
+  when: debpkg_mode
+
+- name: Postgres - install server
+  apt:
+    name: postgresql-{{ postgresql_major }}={{ postgresql_release }}-1.pgdg20.04+1
+    install_recommends: no
+  when: debpkg_mode
+
+- name: Postgres - remove PPA
+  apt_repository:
+    repo: "deb [ trusted=yes ] file:///tmp/build ./"
+    state: absent
+  when: debpkg_mode
+
+- name: Postgres - cleanup package
+  file:
+    path: /tmp/build
+    state: absent
+  when: debpkg_mode
+
+- name: install locales
+  apt:
+    name: locales
+    state: present
+  become: yes
+  when: stage2_nix
+
+- name: configure locales
+  command: echo "C.UTF-8 UTF-8" > /etc/locale.gen && echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen
+  become: yes
+  when: stage2_nix
+
+- name: locale-gen
+  command: sudo locale-gen
+  when: stage2_nix
+
+- name: update-locale
+  command: sudo update-locale
+  when: stage2_nix
+
+- name: Create symlink to /usr/lib/postgresql/bin
+  shell:
+    cmd: ln -s /usr/lib/postgresql/{{ postgresql_major }}/bin /usr/lib/postgresql/bin
+  when: debpkg_mode
+
+- name: Ensure PostgreSQL include/server directory exists
+  file:
+    path: /usr/lib/postgresql/include/server
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: '0755'
+  when: stage2_nix
+
+# - name: Ensure PostgreSQL include directories exist
+#   file:
+#     path: "{{ item }}"
+#     state: directory
+#     owner: postgres
+#     group: postgres
+#     mode: '0755'
+#   with_items:
+#     - /usr/lib/postgresql/include
+#     - /usr/lib/postgresql/include/server
+#   when: stage2_nix
+
+# - name: Create symlinks for PostgreSQL headers
+#   shell: |
+#     ln -sf /var/lib/postgresql/.nix-profile/include/* /usr/lib/postgresql/include/server/
+#   become: yes
+#   when: stage2_nix
+
+# - name: Create symbolic links for PostgreSQL header files
+#   file:
+#     src: "{{ item }}"
+#     dest: "/usr/lib/postgresql/include/server/{{ item | basename }}"
+#     state: link
+#   with_fileglob:
+#     - "/var/lib/postgresql/.nix-profile/include/*.h"
+#   become: yes
+#   when: stage2_nix
+
+
+# - name: create ssl-cert group
+#   group:
+#     name: ssl-cert
+#     state: present
+#   when: nixpkg_mode
+
+# - name: create postgres group
+#   group:
+#     name: postgres
+#     state: present
+#   when: nixpkg_mode
+
+# - name: create postgres user
+#   shell: adduser --system  --home /var/lib/postgresql --no-create-home --shell /bin/bash --group --gecos "PostgreSQL administrator" postgres
+#   args:
+#     executable: /bin/bash
+#   become: yes
+#   when: nixpkg_mode
+
+# - name: add postgres user to postgres group
+#   shell: usermod -a -G ssl-cert postgres
+#   args:
+#     executable: /bin/bash
+#   become: yes
+#   when: nixpkg_mode
+
+- name: create ssl-cert group
+  group:
+    name: ssl-cert
+    state: present
+    gid: 1001
+  when: nixpkg_mode
+
+- name: create postgres group
+  group:
+    name: postgres
+    state: present
+    gid: 1002
+  when: nixpkg_mode
+
+- name: Create postgres user and set primary group
+  user:
+    name: postgres
+    system: yes
+    home: /var/lib/postgresql
+    shell: /bin/bash
+    group: postgres
+    groups: []
+  when: nixpkg_mode
+
+- name: Add postgres to additional groups
+  user:
+    name: postgres
+    group: postgres
+    groups: ssl-cert
+    append: yes
+  when: nixpkg_mode
+
+- name: Verify postgres user groups
+  shell: |
+    echo "=== Verifying postgres user groups ==="
+    id postgres
+    echo "Group memberships:"
+    getent group postgres
+    getent group ssl-cert
+  register: verify_postgres
+  changed_when: false
+  when: nixpkg_mode
+
+- name: Show verification results
+  debug:
+    var: verify_postgres.stdout_lines
+  when: nixpkg_mode
+
+- name: Force system to recognize group changes
+  shell: |
+    # Reload system group cache
+    systemctl daemon-reload
+    # Force group membership update
+    pkill -SIGHUP -u postgres || true
+  changed_when: false
+  when: nixpkg_mode
+
+- name: Create relevant directories
+  file:
+    path: '{{ item }}'
+    recurse: yes
+    state: directory
+    owner: postgres
+    group: postgres
+  with_items:
+    - '/home/postgres'
+    - '/var/log/postgresql'
+    - '/var/lib/postgresql'
+  when: debpkg_mode or nixpkg_mode
+
+- name: Allow adminapi to write custom config
+  file:
+    path: '{{ item }}'
+    recurse: yes
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: 0775
+  with_items:
+    - '/etc/postgresql'
+    - '/etc/postgresql-custom'
+  when: debpkg_mode or nixpkg_mode
+
+- name: create placeholder config files
+  file:
+    path: '/etc/postgresql-custom/{{ item }}'
+    state: touch
+    owner: postgres
+    group: postgres
+    mode: 0664
+  with_items:
+    - 'generated-optimizations.conf'
+    - 'custom-overrides.conf'
+  when: debpkg_mode or nixpkg_mode
+
+# Move Postgres configuration files into /etc/postgresql
+# Add postgresql.conf
+- name: import postgresql.conf
+  template:
+    src: files/postgresql_config/postgresql.conf.j2
+    dest: /etc/postgresql/postgresql.conf
+    group: postgres
+  when: debpkg_mode or nixpkg_mode
+
+# Add pg_hba.conf
+- name: import pg_hba.conf
+  template:
+    src: files/postgresql_config/pg_hba.conf.j2
+    dest: /etc/postgresql/pg_hba.conf
+    group: postgres
+  when: debpkg_mode or nixpkg_mode
+
+# Add pg_ident.conf
+- name: import pg_ident.conf
+  template:
+    src: files/postgresql_config/pg_ident.conf.j2
+    dest: /etc/postgresql/pg_ident.conf
+    group: postgres
+  when: debpkg_mode or nixpkg_mode
+
+# Add custom config for read replicas set up
+- name: Move custom read-replica.conf file to /etc/postgresql-custom/read-replica.conf
+  template:
+    src: "files/postgresql_config/custom_read_replica.conf.j2"
+    dest: /etc/postgresql-custom/read-replica.conf
+    mode: 0664
+    owner: postgres
+    group: postgres
+  when: debpkg_mode or nixpkg_mode
+
+# Install extensions before init
+- name: Install Postgres extensions
+  import_tasks: tasks/setup-docker.yml
+  when: debpkg_mode or stage2_nix
+
+#stage 2 postgres tasks
+- name: stage2 postgres tasks
+  import_tasks: tasks/stage2-setup-postgres.yml
+  when: stage2_nix
+
+# init DB
+- name: Create directory on data volume
+  file:
+    path: '{{ item }}'
+    recurse: yes
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: 0750
+  with_items:
+    - "/data/pgdata"
+  when: debpkg_mode or nixpkg_mode
+
+- name: Link database data_dir to data volume directory
+  file:
+    src: "/data/pgdata"
+    path: "/var/lib/postgresql/data"
+    state: link
+    force: yes
+  when: debpkg_mode or nixpkg_mode
+
+- name: Initialize the database
+  become: yes
+  become_user: postgres
+  shell: /usr/lib/postgresql/bin/pg_ctl -D /var/lib/postgresql/data initdb -o "--allow-group-access" -o "--username=supabase_admin"
+  vars:
+    ansible_command_timeout: 60
+  when: debpkg_mode
+
+- name: Check psql_version and modify supautils.conf and postgresql.conf if necessary
+  block:
+    - name: Check if psql_version is psql_orioledb
+      set_fact:
+        is_psql_oriole: "{{ psql_version in ['psql_orioledb-16', 'psql_orioledb-17'] }}"
+
+    - name: Initialize the database stage2_nix (non-orioledb)
+      become: yes
+      become_user: postgres
+      shell: source /var/lib/postgresql/.bashrc && /usr/lib/postgresql/bin/pg_ctl -D /var/lib/postgresql/data initdb -o "--allow-group-access" -o "--username=supabase_admin"
+      args:
+        executable: /bin/bash
+      environment:
+        LANG: en_US.UTF-8
+        LANGUAGE: en_US.UTF-8
+        LC_ALL: en_US.UTF-8
+        LC_CTYPE: en_US.UTF-8
+        LOCALE_ARCHIVE: /usr/lib/locale/locale-archive
+      vars:
+        ansible_command_timeout: 60
+      when: stage2_nix and not is_psql_oriole
+
+    - name: Initialize the database stage2_nix (orioledb)
+      become: yes
+      become_user: postgres
+      shell: >
+        source /var/lib/postgresql/.bashrc && initdb -D /var/lib/postgresql/data 
+        --allow-group-access 
+        --username=supabase_admin 
+        --locale-provider=icu 
+        --encoding=UTF-8 
+        --icu-locale=en_US.UTF-8 
+      args:
+        executable: /bin/bash
+      environment:
+        LANG: en_US.UTF-8
+        LANGUAGE: en_US.UTF-8
+        LC_ALL: en_US.UTF-8
+        LC_CTYPE: en_US.UTF-8
+        LOCALE_ARCHIVE: /usr/lib/locale/locale-archive
+      vars:
+        ansible_command_timeout: 60
+      when: stage2_nix and is_psql_oriole
+
+- name: copy PG systemd unit
+  template:
+    src: files/postgresql_config/postgresql.service.j2
+    dest: /etc/systemd/system/postgresql.service
+  when: debpkg_mode or stage2_nix
+
+- name: copy optimizations systemd unit
+  template:
+    src: files/database-optimizations.service.j2
+    dest: /etc/systemd/system/database-optimizations.service
+  when: debpkg_mode or stage2_nix
+
+- name: Ensure /run/postgresql exists for lock file creation
+  become: yes
+  file:
+    path: /run/postgresql
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: '2775'
+  when: stage2_nix
+
+- name: Check if PostgreSQL PID file exists
+  stat:
+    path: /var/lib/postgresql/data/postmaster.pid
+  register: pg_pid_file
+  when: stage2_nix
+
+- name: Stop Postgres Database without Systemd (force shutdown)
+  become: yes
+  become_user: postgres
+  shell: /usr/lib/postgresql/bin/pg_ctl -D /var/lib/postgresql/data stop -m immediate
+  args:
+    executable: /bin/bash
+  when: stage2_nix and pg_pid_file.stat.exists
+
+- name: Restart Postgres Database without Systemd
+  become: yes
+  become_user: postgres
+  ansible.builtin.shell: |
+    # Export environment variables inline
+    export LANG=en_US.UTF-8
+    export LANGUAGE=en_US:en
+    export LC_ALL=en_US.UTF-8
+    export LC_CTYPE=en_US.UTF-8
+    export LOCALE_ARCHIVE=/usr/lib/locale/locale-archive
+    # Use the POSIX “.” operator instead of “source”
+    . /var/lib/postgresql/.bashrc
+    /usr/lib/postgresql/bin/pg_ctl -D /var/lib/postgresql/data start
+  args:
+    executable: /bin/bash
+  when: stage2_nix
+
+
+# Reload
+- name: System - systemd reload
+  systemd:
+    enabled: yes
+    name: postgresql
+    daemon_reload: yes
+  when: debpkg_mode or stage2_nix
+
+- name: Make sure .bashrc exists
+  file: 
+    path: /var/lib/postgresql/.bashrc 
+    state: touch
+    owner: postgres
+    group: postgres
+  when: nixpkg_mode 
+
+- name: Add LOCALE_ARCHIVE to .bashrc
+  lineinfile:
+    dest: "/var/lib/postgresql/.bashrc"
+    line: 'export LOCALE_ARCHIVE=/usr/lib/locale/locale-archive'
+    create: yes
+  become: yes
+  when: nixpkg_mode
+
+- name: Add LANG items to .bashrc
+  lineinfile:
+    dest: "/var/lib/postgresql/.bashrc"
+    line: "{{ item }}"
+  loop: 
+    - 'export LANG="en_US.UTF-8"'
+    - 'export LANGUAGE="en_US.UTF-8"'
+    - 'export LC_ALL="en_US.UTF-8"'
+    - 'export LANG="en_US.UTF-8"'
+    - 'export LC_CTYPE="en_US.UTF-8"'
+  become: yes
+  when: nixpkg_mode
+
+- name: Ensure pg_config symlink points to nix installation
+  file:
+    src: "/var/lib/postgresql/.nix-profile/bin/pg_config"
+    dest: "/usr/bin/pg_config"
+    state: link
+    force: yes
+  when: stage2_nix
+'''
+'''--- /postgres/ansible/tasks/clean-build-dependencies.yml ---
+- name: Remove build dependencies
+  apt:
+    pkg:
+      - bison
+      - build-essential
+      - clang-11
+      - cmake
+      - cpp
+      - flex
+      - g++
+      - g++-10
+      - g++-9
+      - gcc-10
+      - make
+      - manpages
+      - manpages-dev
+      - ninja-build
+      - patch
+      - python2
+    state: absent
+    autoremove: yes
+
+'''
+'''--- /postgres/ansible/tasks/internal/supautils.yml ---
+# # supautils
+# - name: supautils - download & install dependencies
+#   apt:
+#     pkg:
+#       - build-essential
+#       - clang-11
+#     update_cache: yes
+#     cache_valid_time: 3600
+#   when: stage2_nix
+
+# - name: supautils - download source
+#   get_url:
+#     url: "https://github.com/supabase/supautils/archive/refs/tags/v2.6.0.tar.gz"
+#     dest: /tmp/supautils-2.6.0.tar.gz
+#     timeout: 60
+#   when: stage2_nix
+
+# - name: supautils - unpack archive
+#   unarchive:
+#     remote_src: yes
+#     src: /tmp/supautils-2.6.0.tar.gz
+#     dest: /tmp
+#   become: yes
+#   when: stage2_nix
+
+# - name: supautils - build
+#   make:
+#     chdir: /tmp/supautils-2.6.0
+#   become: yes
+#   when: stage2_nix
+
+# - name: supautils - install
+#   make:
+#     chdir: /tmp/supautils-2.6.0
+#     target: install
+#   become: yes
+#   when: stage2_nix
+
+# - name: supautils - add supautils to session_preload_libraries
+#   become: yes
+#   replace:
+#     path: /etc/postgresql/postgresql.conf
+#     regexp: "#session_preload_libraries = ''"
+#     replace: session_preload_libraries = 'supautils'
+#   when: stage2_nix
+
+# - name: supautils - write custom supautils.conf
+#   template:
+#     src: "files/postgresql_config/supautils.conf.j2"
+#     dest: /etc/postgresql-custom/supautils.conf
+#     mode: 0664
+#     owner: postgres
+#     group: postgres
+#   when: stage2_nix
+
+# - name: supautils - copy extension custom scripts
+#   copy:
+#     src: files/postgresql_extension_custom_scripts/
+#     dest: /etc/postgresql-custom/extension-custom-scripts
+#     owner: postgres
+#     group: postgres
+#     mode: '0775'
+#   become: yes
+#   when: stage2_nix
+
+# - name: supautils - chown extension custom scripts
+#   file:
+#     mode: 0775
+#     owner: postgres
+#     group: postgres
+#     path: /etc/postgresql-custom/extension-custom-scripts
+#     recurse: yes
+#   become: yes
+#   when: stage2_nix
+
+# - name: supautils - include /etc/postgresql-custom/supautils.conf in postgresql.conf
+#   become: yes
+#   replace:
+#     path: /etc/postgresql/postgresql.conf
+#     regexp: "#include = '/etc/postgresql-custom/supautils.conf'"
+#     replace: "include = '/etc/postgresql-custom/supautils.conf'"
+#   when: stage2_nix
+
+# - name: Remove build artifacts
+#   file:
+#     path: "/tmp/supautils-2.6.0"
+#     state: absent
+#   when: stage2_nix
+
+# supautils
+- name: supautils - download & install dependencies
+  apt:
+    pkg:
+      - build-essential
+      - clang-11
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: supautils - download latest release
+  get_url:
+    url: "https://github.com/supabase/supautils/archive/refs/tags/v{{ supautils_release }}.tar.gz"
+    dest: /tmp/supautils-{{ supautils_release }}.tar.gz
+    checksum: "{{ supautils_release_checksum }}"
+    timeout: 60
+
+- name: supautils - unpack archive
+  unarchive:
+    remote_src: yes
+    src: /tmp/supautils-{{ supautils_release }}.tar.gz
+    dest: /tmp
+  become: yes
+
+- name: supautils - build
+  make:
+    chdir: /tmp/supautils-{{ supautils_release }}
+    params:
+      CPPFLAGS: "-I/usr/lib/postgresql/include/server"
+  environment:
+    PG_CONFIG: /usr/bin/pg_config
+  become: yes
+
+- name: supautils - install
+  make:
+    chdir: /tmp/supautils-{{ supautils_release }}
+    target: install
+  become: yes
+
+- name: supautils - add supautils to session_preload_libraries
+  become: yes
+  replace:
+    path: /etc/postgresql/postgresql.conf
+    regexp: "#session_preload_libraries = ''"
+    replace: session_preload_libraries = 'supautils'
+
+- name: supautils - write custom supautils.conf
+  template:
+    src: "files/postgresql_config/supautils.conf.j2"
+    dest: /etc/postgresql-custom/supautils.conf
+    mode: 0664
+    owner: postgres
+    group: postgres
+
+- name: supautils - copy extension custom scripts
+  copy:
+    src: files/postgresql_extension_custom_scripts/
+    dest: /etc/postgresql-custom/extension-custom-scripts
+  become: yes
+
+- name: supautils - chown extension custom scripts
+  file:
+    mode: 0775
+    owner: postgres
+    group: postgres
+    path: /etc/postgresql-custom/extension-custom-scripts
+    recurse: yes
+  become: yes
+
+- name: supautils - include /etc/postgresql-custom/supautils.conf in postgresql.conf
+  become: yes
+  replace:
+    path: /etc/postgresql/postgresql.conf
+    regexp: "#include = '/etc/postgresql-custom/supautils.conf'"
+    replace: "include = '/etc/postgresql-custom/supautils.conf'"
+
+- name: supautils - remove build dependencies
+  apt:
+    pkg:
+      - build-essential
+      - clang-11
+    state: absent
+
+'''
+'''--- /postgres/ansible/tasks/internal/postgresql-prestart.yml ---
+- name: postgres_prestart - create service file
+  template:
+    src: files/postgres_prestart.sh.j2
+    dest: /usr/local/bin/postgres_prestart.sh
+    mode: a+x
+    owner: root
+    group: root
+
+'''
+'''--- /postgres/ansible/tasks/internal/optimizations.yml ---
+- name: ensure services are stopped and disabled for first boot debian build
+  systemd:
+    enabled: no
+    name: '{{ item }}'
+    state: stopped
+  with_items:
+    - postgresql
+    - pgbouncer
+    - fail2ban
+    - motd-news
+    - vector
+    - lvm2-monitor
+    - salt-minion
+  when: debpkg_mode 
+
+# - name: ensure services are stopped and disabled for first boot nix build
+#   systemd:
+#     enabled: no
+#     name: '{{ item }}'
+#     state: stopped
+#   loop:
+#     - postgresql
+#     - pgbouncer
+#     - fail2ban
+#     - motd-news
+#     - vector
+#     - salt-minion
+#   when: stage2_nix
+#   ignore_errors: yes
+
+- name: ensure services are stopped and disabled for first boot nix build
+  block:
+    - name: Stop and disable services if they exist
+      systemd:
+        enabled: no
+        name: '{{ item }}'
+        state: stopped
+      loop:
+        - postgresql
+        - pgbouncer
+        - fail2ban
+        - motd-news
+        - vector
+        - salt-minion
+      register: service_result
+      failed_when: 
+        - service_result.failed is defined 
+        - service_result.failed
+        - '"Could not find the requested service" not in service_result.msg'
+  when: stage2_nix
+
+
+- name: disable man-db
+  become: yes
+  file:
+    state: absent
+    path: "/etc/cron.daily/{{ item }}"
+  with_items:
+    - man-db
+    - popularity-contest
+    - ubuntu-advantage-tools
+  when: debpkg_mode or stage2_nix
+
+'''
+'''--- /postgres/ansible/tasks/internal/admin-api.yml ---
+- name: adminapi - system user
+  user:
+    name: adminapi
+    groups: root,admin,envoy,kong,pgbouncer,postgres,postgrest,systemd-journal,vector,wal-g
+    append: yes
+  when: stage2_nix
+
+- name: Ensure all required groups exist
+  block:
+    - name: Create admin group if not exists
+      group:
+        name: admin
+        state: present
+        system: yes
+
+    - name: Verify all groups exist
+      shell: |
+        for group in root admin envoy kong pgbouncer postgres postgrest systemd-journal vector wal-g; do
+          getent group $group || echo "Missing group: $group"
+        done
+      register: group_check
+      changed_when: false
+  when: stage2_nix
+
+- name: Move shell scripts to /root dir
+  copy:
+    src: "files/admin_api_scripts/{{ item.file }}"
+    dest: "/root/{{ item.file }}"
+    mode: "0700"
+    owner: root
+  loop:
+    - { file: "grow_fs.sh" }
+    - { file: "manage_readonly_mode.sh" }
+    - { file: "pg_egress_collect.pl" }
+  when: stage2_nix
+
+- name: give adminapi user permissions
+  copy:
+    src: files/adminapi.sudoers.conf
+    dest: /etc/sudoers.d/adminapi
+    mode: "0644"
+
+- name: perms for adminapi
+  shell: |
+    chmod g+w /etc
+
+- name: Setting arch (x86)
+  set_fact:
+    arch: "x86"
+  when: platform == "amd64"
+
+- name: Setting arch (arm)
+  set_fact:
+    arch: "arm64"
+  when: platform == "arm64"
+
+- name: Download adminapi archive
+  get_url:
+    url: "https://supabase-public-artifacts-bucket.s3.amazonaws.com/supabase-admin-api/v{{ adminapi_release }}/supabase-admin-api_{{ adminapi_release }}_linux_{{ arch }}.tar.gz"
+    dest: "/tmp/adminapi.tar.gz"
+    timeout: 90
+
+- name: adminapi - unpack archive in /opt
+  unarchive:
+    remote_src: yes
+    src: /tmp/adminapi.tar.gz
+    dest: /opt
+    owner: adminapi
+
+- name: adminapi - config dir
+  file:
+    path: /etc/adminapi
+    owner: adminapi
+    state: directory
+
+- name: adminapi - pg_upgrade scripts dir
+  file:
+    path: /etc/adminapi/pg_upgrade_scripts
+    owner: adminapi
+    state: directory
+
+- name: Move shell scripts to /etc/adminapi/pg_upgrade_scripts/
+  copy:
+    src: "files/admin_api_scripts/pg_upgrade_scripts/{{ item.file }}"
+    dest: "/etc/adminapi/pg_upgrade_scripts/{{ item.file }}"
+    mode: "0755"
+    owner: adminapi
+  loop:
+    - { file: "check.sh" }
+    - { file: "complete.sh" }
+    - { file: "initiate.sh" }
+    - { file: "prepare.sh" }
+    - { file: "pgsodium_getkey.sh" }
+    - { file: "common.sh" }
+
+- name: adminapi - create service file
+  template:
+    src: files/adminapi.service.j2
+    dest: /etc/systemd/system/adminapi.service
+
+- name: adminapi - create service file for commence backup process
+  template:
+     src: files/commence-backup.service.j2
+     dest: /etc/systemd/system/commence-backup.service
+
+- name: UFW - Allow connections to adminapi ports
+  ufw:
+    rule: allow
+    port: "8085"
+
+- name: adminapi - reload systemd
+  systemd:
+    daemon_reload: yes
+
+- name: adminapi - grant extra priviliges to user
+  shell: chmod 775 /etc && chmod 775 /etc/kong
+
+'''
+'''--- /postgres/ansible/tasks/internal/install-salt.yml ---
+- name: Add apt repository for Saltstack (arm)
+  block:
+    - name: Ensure /etc/apt/keyrings directory exists
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: salt gpg key
+      ansible.builtin.get_url:
+        url: https://packages.broadcom.com/artifactory/api/security/keypair/SaltProjectKey/public
+        dest: /etc/apt/keyrings/salt-archive-keyring-2023.pgp
+        mode: '0644'
+
+    - name: salt apt repo
+      ansible.builtin.apt_repository:
+         repo: "deb [signed-by=/etc/apt/keyrings/salt-archive-keyring-2023.pgp arch=arm64] https://packages.broadcom.com/artifactory/saltproject-deb/ stable main"
+         filename: 'salt.list'
+         state: present
+  when: platform == "arm64"
+
+- name: Add apt repository for Saltstack (amd)
+  block:
+    - name: Ensure /etc/apt/keyrings directory exists
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: salt gpg key
+      ansible.builtin.get_url:
+        url: https://packages.broadcom.com/artifactory/api/security/keypair/SaltProjectKey/public
+        dest: /etc/apt/keyrings/salt-archive-keyring-2023.pgp
+        mode: '0644'
+
+    - name: salt apt repo
+      ansible.builtin.apt_repository:
+         repo: "deb [signed-by=/etc/apt/keyrings/salt-archive-keyring-2023.pgp arch=amd64] https://packages.broadcom.com/artifactory/saltproject-deb/ stable main"
+         filename: 'salt.list'
+         state: present
+  when: platform == "amd64"
+
+- name: Salt minion install
+  apt:
+    name: salt-minion
+    state: present
+    update_cache: yes
+
+'''
+'''--- /postgres/ansible/tasks/internal/pg_egress_collect.yml ---
+- name: pg_egress_collect - install tcpdump and perl async lib
+  apt:
+    pkg:
+      - tcpdump
+      - libio-async-perl
+
+
+- name: pg_egress_collect - create service file
+  template:
+    src: files/pg_egress_collect.service.j2
+    dest: /etc/systemd/system/pg_egress_collect.service
+
+- name: pg_egress_collect - reload systemd
+  systemd:
+    daemon_reload: yes
+
+
+'''
+'''--- /postgres/ansible/tasks/internal/admin-mgr.yml ---
+- name: Setting arch (x86)
+  set_fact:
+    arch: "amd64"
+  when: platform == "amd64"
+
+- name: Setting arch (arm)
+  set_fact:
+    arch: "arm64"
+  when: platform == "arm64"
+
+- name: Download admin-mgr archive
+  get_url:
+    url: "https://supabase-public-artifacts-bucket.s3.amazonaws.com/admin-mgr/v{{ adminmgr_release }}/admin-mgr_{{ adminmgr_release }}_linux_{{ arch }}.tar.gz"
+    dest: "/tmp/admin-mgr.tar.gz"
+    timeout: 90
+
+- name: admin-mgr - unpack archive in /usr/bin/
+  unarchive:
+    remote_src: yes
+    src: /tmp/admin-mgr.tar.gz
+    dest: /usr/bin/
+    owner: root
+
+'''
+'''--- /postgres/ansible/tasks/internal/collect-pg-binaries.yml ---
+- name: Collect Postgres binaries - create collection directory
+  file:
+    path: /tmp/pg_binaries/{{ postgresql_major }}/
+    state: directory
+
+- name: Collect Postgres binaries - collect binaries and libraries
+  copy:
+    remote_src: yes
+    src: /usr/lib/postgresql/{{ postgresql_major }}/{{ item }}/
+    dest: /tmp/pg_binaries/{{ postgresql_major }}/{{ item }}/
+  with_items:
+    - bin
+    - lib
+
+- name: Collect Postgres libraries - collect libraries which are in /usr/lib/postgresql/lib/
+  copy:
+    remote_src: yes
+    src: /usr/lib/postgresql/lib/
+    dest: /tmp/pg_binaries/{{ postgresql_major }}/lib/
+
+- name: Collect Postgres libraries - collect libraries which are in /var/lib/postgresql/extension/
+  copy:
+    remote_src: yes
+    src: /var/lib/postgresql/extension/
+    dest: /tmp/pg_binaries/{{ postgresql_major }}/lib/
+
+- name: Collect Postgres libraries - collect latest libpq
+  copy:
+    remote_src: yes
+    src: /usr/lib/aarch64-linux-gnu/libpq.so.5
+    dest: /tmp/pg_binaries/{{ postgresql_major }}/lib/libpq.so.5
+
+- name: Collect Postgres binaries - collect shared files
+  copy:
+    remote_src: yes
+    src: /usr/share/postgresql/{{ postgresql_major }}/
+    dest: /tmp/pg_binaries/{{ postgresql_major }}/share/
+
+- name: Collect Postgres binaries - create tarfile
+  archive:
+    path: /tmp/pg_binaries/
+    dest: /tmp/pg_binaries.tar.gz
+    remove: yes
+
+- name: Fetch tarfile to local
+  fetch:
+    src: /tmp/pg_binaries.tar.gz
+    dest: /tmp/
+    flat: true
+
+'''
+'''--- /postgres/ansible/tasks/internal/setup-ansible-pull.yml ---
+- name: install ansible
+  shell:
+    cmd: |
+      apt install -y software-properties-common
+      add-apt-repository --yes --update ppa:ansible/ansible
+      apt install -y ansible
+      sed -i -e 's/#callback_whitelist.*/callback_whitelist = profile_tasks/' /etc/ansible/ansible.cfg
+
+- name: ansible pull systemd units
+  copy:
+    src: files/{{ item }}
+    dest: /etc/systemd/system/{{ item }}
+  with_items:
+    - ansible-pull.service
+    - ansible-pull.timer
+
+- name: create facts dir
+  file:
+    path: /etc/ansible/facts.d
+    state: directory
+
+- name: ansible facts
+  copy:
+    src: files/supabase_facts.ini
+    dest: /etc/ansible/facts.d/supabase.fact
+
+- name: reload systemd
+  systemd:
+    daemon_reload: yes
+
+'''
+'''--- /postgres/ansible/tasks/internal/postgres-exporter.yml ---
+- name: UFW - Allow connections to exporter for prometheus
+  ufw:
+    rule: allow
+    port: "9187"
+
+- name: create directories - systemd unit
+  file:
+    state: directory
+    path: /etc/systemd/system/postgres_exporter.service.d
+    owner: root
+    mode: '0700'
+  become: yes
+
+- name: create directories - service files
+  file:
+    state: directory
+    path: /opt/postgres_exporter
+    owner: postgres
+    group: postgres
+    mode: '0775'
+  become: yes
+
+- name: download postgres exporter
+  get_url:
+    url: "https://github.com/prometheus-community/postgres_exporter/releases/download/v{{ postgres_exporter_release }}/postgres_exporter-{{ postgres_exporter_release }}.linux-{{ platform }}.tar.gz"
+    dest: /tmp/postgres_exporter.tar.gz
+    checksum: "{{ postgres_exporter_release_checksum[platform] }}"
+    timeout: 60
+
+- name: expand postgres exporter
+  unarchive:
+    remote_src: yes
+    src: /tmp/postgres_exporter.tar.gz
+    dest: /opt/postgres_exporter
+    extra_opts: [--strip-components=1]
+  become: yes
+
+- name: exporter create a service
+  template:
+    src: files/postgres_exporter.service.j2
+    dest: /etc/systemd/system/postgres_exporter.service
+
+- name: exporter ensure service is present
+  systemd:
+    enabled: no
+    name: postgres_exporter
+    daemon_reload: yes
+    state: stopped
+
+'''
+'''--- /postgres/ansible/tasks/internal/setup-nftables.yml ---
+- name: nftables overrides
+  file:
+    state: directory
+    path: /etc/nftables
+    owner: adminapi
+
+- name: nftables empty config
+  file:
+    state: touch
+    path: /etc/nftables/supabase_managed.conf
+    owner: adminapi
+
+- name: include managed config
+  shell: |
+    cat >> "/etc/nftables.conf" << EOF
+    table inet supabase_managed { }
+    include "/etc/nftables/supabase_managed.conf";
+
+    EOF
+
+- name: ufw overrides dir
+  file:
+    state: directory
+    path: /etc/systemd/system/ufw.service.d
+    owner: root
+
+- name: Custom systemd overrides
+  copy:
+    src: files/ufw.service.conf
+    dest: /etc/systemd/system/ufw.service.d/overrides.conf
+
+- name: reload systemd
+  systemd:
+    daemon_reload: yes
+
+'''

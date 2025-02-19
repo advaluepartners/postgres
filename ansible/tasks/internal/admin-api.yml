@@ -3,6 +3,24 @@
     name: adminapi
     groups: root,admin,envoy,kong,pgbouncer,postgres,postgrest,systemd-journal,vector,wal-g
     append: yes
+  when: stage2_nix
+
+- name: Ensure all required groups exist
+  block:
+    - name: Create admin group if not exists
+      group:
+        name: admin
+        state: present
+        system: yes
+
+    - name: Verify all groups exist
+      shell: |
+        for group in root admin envoy kong pgbouncer postgres postgrest systemd-journal vector wal-g; do
+          getent group $group || echo "Missing group: $group"
+        done
+      register: group_check
+      changed_when: false
+  when: stage2_nix
 
 - name: Move shell scripts to /root dir
   copy:
@@ -14,6 +32,7 @@
     - { file: "grow_fs.sh" }
     - { file: "manage_readonly_mode.sh" }
     - { file: "pg_egress_collect.pl" }
+  when: stage2_nix
 
 - name: give adminapi user permissions
   copy:

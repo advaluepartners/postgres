@@ -1,4 +1,4 @@
-# PgBouncer
+# Keep the installation tasks but add conditions
 - name: PgBouncer - download & install dependencies
   apt:
     pkg:
@@ -9,13 +9,16 @@
       - libsystemd-dev
     update_cache: yes
     cache_valid_time: 3600
+  when: debpkg_mode or stage2_nix
 
+# Add when conditions to download, unpack, configure, build, install
 - name: PgBouncer - download latest release
   get_url:
     url: "https://www.pgbouncer.org/downloads/files/{{ pgbouncer_release }}/pgbouncer-{{ pgbouncer_release }}.tar.gz"
     dest: /tmp/pgbouncer-{{ pgbouncer_release }}.tar.gz
     checksum: "{{ pgbouncer_release_checksum }}"
     timeout: 60
+  when: debpkg_mode or stage2_nix
 
 - name: PgBouncer - unpack archive
   unarchive:
@@ -41,95 +44,157 @@
     target: install
   become: yes
 
+- name: Debug - Show execution mode
+  debug:
+    msg: 
+      - "Running in: {{ 'nixpkg_mode' if nixpkg_mode | default(false) else 'debpkg_mode' if debpkg_mode | default(false) else 'stage2_nix' if stage2_nix | default(false) else 'unknown' }} mode"
+
+- name: Debug - Initial group status
+  shell: |
+    echo "=== Initial Group Status ==="
+    for group in postgres ssl-cert pgbouncer; do
+      echo "[$group]"
+      getent group $group || echo "not found"
+    done
+  register: initial_groups
+  changed_when: false
+
+# Group and user management - consolidated version
+- name: Ensure required groups exist with specific GIDs
+  group:
+    name: "{{ item.name }}"
+    gid: "{{ item.gid }}"
+    state: present
+    system: yes
+  loop:
+    - { name: 'postgres', gid: 1002 }
+    - { name: 'ssl-cert', gid: 1001 }
+    - { name: 'pgbouncer', gid: 101 }
+  when: stage2_nix
+
 - name: Create pgbouncer user
   user:
     name: pgbouncer
+    uid: 101
     shell: /bin/false
+    system: yes
     comment: PgBouncer user
-    groups: postgres,ssl-cert
+    group: pgbouncer
+  when: stage2_nix
 
-- name: PgBouncer - create a directory if it does not exist
+- name: Add pgbouncer to groups and verify
+  block:
+    - name: Add pgbouncer to groups
+      shell: |
+        usermod -a -G postgres,ssl-cert pgbouncer
+        systemctl daemon-reload
+        if command -v nscd >/dev/null 2>&1; then
+          nscd -i group
+          nscd -i passwd
+        fi
+        sleep 2
+        # Verify membership
+        id pgbouncer | grep -q "postgres" && \
+        id pgbouncer | grep -q "ssl-cert" && \
+        id pgbouncer | grep -q "pgbouncer"
+      register: group_add_result
+      failed_when: group_add_result.rc != 0
+
+    - name: Verify final group memberships
+      shell: |
+        echo "=== Final Group Memberships ==="
+        id pgbouncer
+        echo "Group details:"
+        getent group postgres
+        getent group ssl-cert
+        getent group pgbouncer
+      register: final_verify
+  when: stage2_nix
+
+# Directory and file setup
+- name: Create PgBouncer directories
   file:
-    path: /etc/pgbouncer
+    path: "{{ item.path }}"
     state: directory
     owner: pgbouncer
     group: pgbouncer
-    mode: '0700'
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: '/etc/pgbouncer', mode: '0700' }
+    - { path: '/etc/pgbouncer-custom', mode: '0775' }
+  when: stage2_nix
 
-- name: PgBouncer - create a directory if it does not exist
+- name: Create config files
   file:
-    state: directory
-    owner: pgbouncer
-    group: pgbouncer
-    path: '{{ item }}'
-    mode: '0775'
-  with_items:
-    - '/etc/pgbouncer-custom'
-
-- name: create placeholder config files
-  file:
-    path: '/etc/pgbouncer-custom/{{ item }}'
+    path: "/etc/pgbouncer-custom/{{ item }}"
     state: touch
     owner: pgbouncer
     group: pgbouncer
-    mode: 0664
-  with_items:
+    mode: '0664'
+  loop:
     - 'generated-optimizations.ini'
     - 'custom-overrides.ini'
     - 'ssl-config.ini'
+  when: stage2_nix
 
-- name: PgBouncer - adjust pgbouncer.ini
-  copy:
-    src: files/pgbouncer_config/pgbouncer.ini.j2
-    dest: /etc/pgbouncer/pgbouncer.ini
-    owner: pgbouncer
-    mode: '0700'
+# Configuration files
+- name: Configure PgBouncer
+  block:
+    - name: Copy pgbouncer.ini
+      copy:
+        src: files/pgbouncer_config/pgbouncer.ini.j2
+        dest: /etc/pgbouncer/pgbouncer.ini
+        owner: pgbouncer
+        mode: '0700'
 
-- name: PgBouncer - create a directory if it does not exist
-  file:
-    path: /etc/pgbouncer/userlist.txt
-    state: touch
-    owner: pgbouncer
-    mode: '0700'
-      
-- name: import /etc/tmpfiles.d/pgbouncer.conf
-  template:
-    src: files/pgbouncer_config/tmpfiles.d-pgbouncer.conf.j2
-    dest: /etc/tmpfiles.d/pgbouncer.conf
-  become: yes
+    - name: Create userlist.txt
+      file:
+        path: /etc/pgbouncer/userlist.txt
+        state: touch
+        owner: pgbouncer
+        mode: '0700'
 
-- name: PgBouncer - By default allow ssl connections.
-  become: yes
-  copy:
-    dest: /etc/pgbouncer-custom/ssl-config.ini
-    content: |
-      client_tls_sslmode = allow
+    - name: Configure tmpfiles.d
+      template:
+        src: files/pgbouncer_config/tmpfiles.d-pgbouncer.conf.j2
+        dest: /etc/tmpfiles.d/pgbouncer.conf
 
-- name: Grant pg_hba and pgbouncer grp perm for adminapi updates
-  shell: |
-     chmod g+w /etc/postgresql/pg_hba.conf
-     chmod g+w /etc/pgbouncer-custom/ssl-config.ini
+    - name: Configure SSL
+      copy:
+        dest: /etc/pgbouncer-custom/ssl-config.ini
+        content: |
+          client_tls_sslmode = allow
+        owner: pgbouncer
+        group: pgbouncer
+        mode: '0664'
+  when: stage2_nix
 
-# Add fail2ban filter
-- name: import jail.d/pgbouncer.conf
-  template:
-    src: files/fail2ban_config/jail-pgbouncer.conf.j2
-    dest: /etc/fail2ban/jail.d/pgbouncer.conf
-  become: yes
+# Permissions and fail2ban
+- name: Configure permissions and security
+  block:
+    - name: Set file permissions
+      shell: |
+        chmod g+w /etc/postgresql/pg_hba.conf
+        chmod g+w /etc/pgbouncer-custom/ssl-config.ini
 
-- name: import filter.d/pgbouncer.conf
-  template:
-    src: files/fail2ban_config/filter-pgbouncer.conf.j2
-    dest: /etc/fail2ban/filter.d/pgbouncer.conf
-  become: yes
+    - name: Configure fail2ban
+      template:
+        src: "files/fail2ban_config/{{ item.src }}"
+        dest: "/etc/fail2ban/{{ item.dest }}"
+      loop:
+        - { src: 'jail-pgbouncer.conf.j2', dest: 'jail.d/pgbouncer.conf' }
+        - { src: 'filter-pgbouncer.conf.j2', dest: 'filter.d/pgbouncer.conf' }
+  when: stage2_nix
 
-# Add systemd file for PgBouncer
-- name: PgBouncer - import postgresql.service
-  template:
-    src: files/pgbouncer_config/pgbouncer.service.j2
-    dest: /etc/systemd/system/pgbouncer.service
-  become: yes
+# Systemd setup
+- name: Configure systemd
+  block:
+    - name: Install service file
+      template:
+        src: files/pgbouncer_config/pgbouncer.service.j2
+        dest: /etc/systemd/system/pgbouncer.service
 
-- name: PgBouncer - reload systemd
-  systemd:
-    daemon_reload: yes
+    - name: Reload systemd
+      systemd:
+        daemon_reload: yes
+  when: stage2_nix

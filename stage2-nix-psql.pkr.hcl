@@ -19,21 +19,31 @@ variable "region" {
 
 variable "ami_name" {
   type    = string
-  default = "supabase-postgres"
+  default = "capitala-postgres"
 }
 
 variable "postgres-version" {
-  type = string
+  type    = string
   default = ""
 }
 
 variable "git-head-version" {
-  type = string
+  type    = string
   default = "unknown"
 }
 
+variable "postgres_major_version" {
+  type    = string
+  default = "15"
+}
+
+variable "git_commit_sha" {
+  type    = string
+  default = "local"  # Indicates local flake use
+}
+
 variable "packer-execution-id" {
-  type = string
+  type    = string
   default = "unknown"
 }
 
@@ -41,14 +51,10 @@ variable "force-deregister" {
   type    = bool
   default = false
 }
+
 variable "git_sha" {
   type    = string
   default = env("GIT_SHA")
-}
-
-variable "postgres_major_version" {
-  type    = string
-  default = ""
 }
 
 packer {
@@ -62,11 +68,11 @@ packer {
 
 source "amazon-ebs" "ubuntu" {
   ami_name      = "${var.ami_name}-${var.postgres-version}"
-  instance_type = "c6g.4xlarge"
+  instance_type = "c6g.xlarge"
   region        = "${var.region}"
   source_ami_filter {
     filters = {
-      name   = "${var.ami_name}-${var.postgres-version}-stage-1"
+      name                = "${var.ami_name}-${var.postgres-version}-stage-1"
       root-device-type    = "ebs"
       virtualization-type = "hvm"
     }
@@ -80,7 +86,6 @@ source "amazon-ebs" "ubuntu" {
   ssh_timeout = "5m"
   
   associate_public_ip_address = true
-
 
   ena_support = true
   
@@ -111,9 +116,11 @@ build {
     "source.amazon-ebs.ubuntu"
   ]
 
-  # Copy ansible playbook
-  provisioner "shell" {
-    inline = ["mkdir /tmp/ansible-playbook"]
+ provisioner "shell" {
+    inline = [
+      "mkdir -p /tmp/ansible-playbook",
+      "mkdir -p /tmp/ansible-playbook/nix"
+    ]
   }
 
   provisioner "file" {
@@ -127,21 +134,36 @@ build {
   }
 
   provisioner "file" {
-    source       = "ebssurrogate/files/unit-tests"
-    destination  = "/tmp/unit-tests"
+    source = "ebssurrogate/files/unit-tests"
+    destination = "/tmp/unit-tests"
   }
 
   provisioner "file" {
     source = "scripts"
     destination = "/tmp/ansible-playbook"
   }
+
+  provisioner "file" {
+    source = "flake.nix"
+    destination = "/tmp/ansible-playbook/flake.nix"
+  }
+
+  provisioner "file" {
+    source = "flake.lock"
+    destination = "/tmp/ansible-playbook/flake.lock"
+  }
+
+  provisioner "file" {
+    source = "nix/"
+    destination = "/tmp/ansible-playbook/nix/"
+  }
   
   provisioner "shell" {
     environment_vars = [
-      "GIT_SHA=${var.git_sha}",
+      "GIT_SHA=${var.git_commit_sha}",
       "POSTGRES_MAJOR_VERSION=${var.postgres_major_version}"
     ]
-     script = "scripts/nix-provision.sh"
+    script = "scripts/nix-provision.sh"
   }
-  
 }
+  

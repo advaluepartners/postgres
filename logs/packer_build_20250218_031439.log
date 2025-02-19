@@ -1,0 +1,33 @@
+2025/02/18 03:14:39 [INFO] Packer version: 1.12.0 [go1.22.9 darwin arm64]
+2025/02/18 03:14:39 [INFO] PACKER_CONFIG env var not set; checking the default config file path
+2025/02/18 03:14:39 [INFO] PACKER_CONFIG env var set; attempting to open config file: /Users/barneycook/.packerconfig
+2025/02/18 03:14:39 [WARN] Config file doesn't exist: /Users/barneycook/.packerconfig
+2025/02/18 03:14:39 [INFO] Setting cache directory: /Users/barneycook/.cache/packer
+
+  on ./stage2-nix-psql.pkr.hcl line 36, in variables:
+  36:   git_commit_sha {
+
+Blocks are not allowed here.
+
+Error: Undefined -var variable
+
+A "git_commit_sha" variable was passed in the command line but was not found in
+Error: Unexpected "git_commit_sha" block
+known variables. To declare variable "git_commit_sha", place this block in one
+
+of your .pkr files, such as variables.pkr.hcl
+
+2025/02/18 03:14:39 [INFO] (telemetry) Finalizing.
+  on ./stage2-nix-psql.pkr.hcl line 36, in variables:
+  36:   git_commit_sha {
+
+Blocks are not allowed here.
+
+Error: Undefined -var variable
+
+A "git_commit_sha" variable was passed in the command line but was not found in
+known variables. To declare variable "git_commit_sha", place this block in one
+of your .pkr files, such as variables.pkr.hcl
+
+
+2025/02/18 03:14:40 waiting for all plugin processes to complete...

@@ -57,3 +57,6 @@ adminmgr_release: 0.24.1
 
 vector_x86_deb: "https://packages.timber.io/vector/0.22.3/vector_0.22.3-1_amd64.deb"
 vector_arm_deb: "https://packages.timber.io/vector/0.22.3/vector_0.22.3-1_arm64.deb"
+
+supautils_release: "2.6.0"
+supautils_release_checksum: "sha256:b1cf964d1c56f45120d4724bfaf258cc7c0caccb30d8bde20bcda088a5990718"
