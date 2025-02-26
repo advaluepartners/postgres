@@ -1,0 +1,36 @@
+---
+# tasks/postgres-extensions/05-pgaudit.yml
+
+- name: pgaudit - ensure extension directory exists
+  file:
+    path: "/usr/lib/postgresql/share/postgresql/extension"
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: '0755'
+  become: yes
+  when: stage2_nix
+
+- name: pgaudit - copy extension from Nix profile
+  shell: |
+    cp -f /var/lib/postgresql/.nix-profile/share/postgresql/extension/pgaudit* /usr/lib/postgresql/share/postgresql/extension/
+    chmod 644 /usr/lib/postgresql/share/postgresql/extension/pgaudit*
+    chown postgres:postgres /usr/lib/postgresql/share/postgresql/extension/pgaudit*
+  become: yes
+  when: stage2_nix
+
+- name: pgaudit - copy library from Nix profile
+  shell: |
+    cp -f /var/lib/postgresql/.nix-profile/lib/postgresql/pgaudit.so /usr/lib/postgresql/lib/pgaudit.so
+    chmod 755 /usr/lib/postgresql/lib/pgaudit.so
+    chown postgres:postgres /usr/lib/postgresql/lib/pgaudit.so
+  become: yes
+  when: stage2_nix
+
+- name: pgaudit - ensure shared_preload_libraries includes pgaudit
+  lineinfile:
+    path: /etc/postgresql/postgresql.conf
+    regexp: '^shared_preload_libraries\s*='
+    line: "shared_preload_libraries = 'pgaudit'"
+    backrefs: yes
+  when: stage2_nix

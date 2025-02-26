@@ -1,0 +1,157 @@
+- name: Install plv8
+  block:
+    - name: Debug existing APT sources
+      command: "cat /etc/apt/sources.list /etc/apt/sources.list.d/*.list"
+      register: apt_sources
+      changed_when: false
+      ignore_errors: yes
+
+    - name: Show APT sources
+      debug:
+        var: apt_sources.stdout_lines
+
+    - name: Add PostgreSQL GPG key
+      apt_key:
+        url: "https://www.postgresql.org/media/keys/ACCC4CF8.asc"
+        state: present
+      become: yes
+
+    - name: Update APT cache with detailed output
+      command: "apt-get update"
+      register: apt_update_output
+      ignore_errors: yes
+      changed_when: false
+
+    - name: Debug APT update output
+      debug:
+        msg: |
+          stdout: {{ apt_update_output.stdout | default('No stdout') }}
+          stderr: {{ apt_update_output.stderr | default('No stderr') }}
+
+    - name: Fail if APT update failed
+      fail:
+        msg: "APT update failed: {{ apt_update_output.stderr | default('No stderr available') }}"
+      when: apt_update_output.rc != 0
+
+    - name: Install build dependencies for plv8
+      apt:
+        name:
+          - build-essential
+          - postgresql-server-dev-15
+          - libv8-dev
+        state: present
+        update_cache: no
+      become: yes
+      retries: 3
+      delay: 5
+      register: apt_install
+      until: apt_install is success
+
+    - name: Get PostgreSQL sharedir
+      command: "/usr/lib/postgresql/bin/pg_config --sharedir"
+      register: pg_sharedir
+      changed_when: false
+
+    - name: Debug PostgreSQL sharedir
+      debug:
+        var: pg_sharedir.stdout
+
+    - name: Ensure extension directory exists
+      file:
+        path: "{{ pg_sharedir.stdout }}/extension"
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: '0755'
+      become: yes
+
+    - name: Ensure /tmp directory is writable
+      file:
+        path: /tmp
+        state: directory
+        mode: '1777'
+      become: yes
+
+    - name: Download plv8 source
+      get_url:
+        url: "https://github.com/plv8/plv8/archive/bcddd92f71530e117f2f98b92d206dafe824f73a.tar.gz"
+        dest: "/tmp/plv8.tar.gz"
+        mode: '0644'
+      become: yes
+
+    - name: Unpack plv8 source
+      unarchive:
+        src: "/tmp/plv8.tar.gz"
+        dest: "/tmp"
+        remote_src: yes
+      become: yes
+
+    - name: Build plv8
+      command: "make"
+      args:
+        chdir: "/tmp/plv8-bcddd92f71530e117f2f98b92d206dafe824f73a"
+      environment:
+        PATH: "{{ ansible_env.PATH }}:/usr/lib/postgresql/bin"
+        PG_CONFIG: "/usr/lib/postgresql/bin/pg_config"
+      become: yes
+
+    - name: Install plv8 to staging directory
+      command: "make install DESTDIR=/tmp/plv8-install"
+      args:
+        chdir: "/tmp/plv8-bcddd92f71530e117f2f98b92d206dafe824f73a"
+      environment:
+        PATH: "{{ ansible_env.PATH }}:/usr/lib/postgresql/bin"
+        PG_CONFIG: "/usr/lib/postgresql/bin/pg_config"
+      become: yes
+      register: plv8_install
+
+    - name: Debug installed files
+      shell: "find /tmp/plv8-install -type f"
+      register: installed_files
+      changed_when: false
+      become: yes
+
+    - name: Show installed files
+      debug:
+        var: installed_files.stdout_lines
+
+    - name: Verify files exist before copy
+      shell: "ls -l /tmp/plv8-install/usr/share/postgresql/15/extension/"
+      register: pre_copy_check
+      changed_when: false
+      become: yes
+      failed_when: pre_copy_check.rc != 0
+
+    - name: Show pre-copy file check
+      debug:
+        var: pre_copy_check.stdout_lines
+
+    - name: Copy plv8 extension files to correct location
+      copy:
+        src: "/tmp/plv8-install/usr/share/postgresql/15/extension/"
+        dest: "{{ pg_sharedir.stdout }}/extension/"
+        owner: postgres
+        group: postgres
+        mode: '0644'
+        remote_src: yes
+      become: yes
+      when: plv8_install is changed
+
+    - name: Debug plv8 install output
+      debug:
+        msg: |
+          stdout: {{ plv8_install.stdout | default('No stdout') }}
+          stderr: {{ plv8_install.stderr | default('No stderr') }}
+      when: plv8_install is changed
+
+    - name: Verify plv8 installation
+      command: "ls {{ pg_sharedir.stdout }}/extension/plv8.control"
+      register: plv8_verify
+      changed_when: false
+      failed_when: plv8_verify.rc != 0
+
+    - name: Cleanup staging directory
+      file:
+        path: "/tmp/plv8-install"
+        state: absent
+      become: yes

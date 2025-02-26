@@ -86,41 +86,6 @@
     mode: '0755'
   when: stage2_nix
 
-- name: Install PostgreSQL development files from local flake
-  become: yes
-  shell: |
-    sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && \
-      nix profile install /tmp/ansible-playbook#psql_15.exts && \
-      nix profile install /tmp/ansible-playbook#psql_15.exts.supautils"
-  when: stage2_nix
-  register: install_exts
-  retries: 3
-  delay: 5
-  until: install_exts.rc == 0
-
-- name: Ensure PostgreSQL include directories exist
-  file:
-    path: "{{ item }}"
-    state: directory
-    owner: postgres
-    group: postgres
-    mode: '0755'
-  with_items:
-    - /usr/lib/postgresql/include
-    - /usr/lib/postgresql/include/server
-  when: stage2_nix
-
-- name: Create symlink for PostgreSQL include directory
-  file:
-    src: "/var/lib/postgresql/.nix-profile/include"
-    dest: "/usr/lib/postgresql/include"
-    state: link
-    owner: postgres
-    group: postgres
-    mode: '0755'
-  become: yes
-  when: stage2_nix
-
 # - name: Ensure PostgreSQL include directories exist
 #   file:
 #     path: "{{ item }}"
@@ -133,21 +98,21 @@
 #     - /usr/lib/postgresql/include/server
 #   when: stage2_nix
 
-# - name: Create symlinks for PostgreSQL headers
-#   shell: |
-#     ln -sf /var/lib/postgresql/.nix-profile/include/* /usr/lib/postgresql/include/server/
-#   become: yes
-#   when: stage2_nix
+- name: Create symlinks for PostgreSQL headers
+  shell: |
+    ln -sf /var/lib/postgresql/.nix-profile/include/* /usr/lib/postgresql/include/server/
+  become: yes
+  when: stage2_nix
 
-# - name: Create symbolic links for PostgreSQL header files
-#   file:
-#     src: "{{ item }}"
-#     dest: "/usr/lib/postgresql/include/server/{{ item | basename }}"
-#     state: link
-#   with_fileglob:
-#     - "/var/lib/postgresql/.nix-profile/include/*.h"
-#   become: yes
-#   when: stage2_nix
+- name: Create symbolic links for PostgreSQL header files
+  file:
+    src: "{{ item }}"
+    dest: "/usr/lib/postgresql/include/server/{{ item | basename }}"
+    state: link
+  with_fileglob:
+    - "/var/lib/postgresql/.nix-profile/include/*.h"
+  become: yes
+  when: stage2_nix
 
 
 # - name: create ssl-cert group
@@ -311,12 +276,12 @@
   import_tasks: tasks/setup-docker.yml
   when: debpkg_mode or stage2_nix
 
+
 #stage 2 postgres tasks
 - name: stage2 postgres tasks
   import_tasks: tasks/stage2-setup-postgres.yml
   when: stage2_nix
 
-# init DB
 - name: Create directory on data volume
   file:
     path: '{{ item }}'
@@ -336,6 +301,155 @@
     state: link
     force: yes
   when: debpkg_mode or nixpkg_mode
+
+### Test1 Block Sunday 23 -- added the below 
+- name: Debug pg_config sharedir
+  shell: "/usr/bin/pg_config --sharedir"
+  register: pg_config_sharedir
+  become: yes
+  when: stage2_nix
+
+- name: Display pg_config sharedir
+  debug:
+    var: pg_config_sharedir.stdout
+  when: stage2_nix
+
+- name: Debug pg_config from bin directory
+  shell: "/usr/lib/postgresql/bin/pg_config --sharedir"
+  register: pg_config_bin_sharedir
+  become: yes
+  when: stage2_nix
+
+- name: Display pg_config from bin directory
+  debug:
+    var: pg_config_bin_sharedir.stdout
+  when: stage2_nix
+
+- name: Ensure extension directory exists
+  file:
+    path: "/usr/lib/postgresql/share/postgresql/extension"
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: '0755'
+  become: yes
+  when: stage2_nix
+
+- name: Debug source extension directory
+  shell: "ls -l /var/lib/postgresql/.nix-profile/share/postgresql/extension/"
+  register: source_ext_debug
+  become: yes
+  when: stage2_nix
+
+- name: Display source extension directory contents
+  debug:
+    var: source_ext_debug.stdout_lines
+  when: stage2_nix
+
+- name: Copy extension files from Nix profile
+  shell: |
+    cp -rf /var/lib/postgresql/.nix-profile/share/postgresql/extension/* /usr/lib/postgresql/share/postgresql/extension/
+  become: yes
+  when: stage2_nix
+
+# - name: Set ownership of extension files
+#   file:
+#     path: "/usr/lib/postgresql/share/postgresql/extension"
+#     owner: postgres
+#     group: postgres
+#     recurse: yes
+#   become: yes
+#   when: stage2_nix
+
+- name: Set ownership and permissions of extension files
+  file:
+    path: "/usr/lib/postgresql/share/postgresql/extension"
+    owner: postgres
+    group: postgres
+    mode: '0755'
+    recurse: yes
+  become: yes
+  when: stage2_nix
+
+
+- name: Debug plpgsql.control file status
+  shell: "ls -l /usr/lib/postgresql/share/postgresql/extension/plpgsql.control || echo 'File not found'"
+  register: plpgsql_file_debug
+  become: yes
+  when: stage2_nix
+
+- name: Display plpgsql.control file details
+  debug:
+    var: plpgsql_file_debug.stdout
+  when: stage2_nix
+
+
+- name: Debug extension file status
+  shell: "ls -l /usr/lib/postgresql/share/postgresql/extension/uuid-ossp.control || echo 'File not found'"
+  register: ext_file_debug
+  become: yes
+  when: stage2_nix
+
+- name: Display extension file details
+  debug:
+    var: ext_file_debug.stdout
+  when: stage2_nix
+
+- name: Test access to plpgsql.control
+  become: yes
+  become_user: postgres
+  shell: "cat /usr/lib/postgresql/share/postgresql/extension/plpgsql.control > /dev/null || echo 'Access denied'"
+  register: access_test
+  ignore_errors: yes
+  when: stage2_nix
+
+- name: Display access test result
+  debug:
+    var: access_test.stdout
+  when: stage2_nix
+
+- name: Debug parent directory permissions
+  shell: "ls -ld /usr/lib/postgresql /usr/lib/postgresql/share /usr/lib/postgresql/share/postgresql /usr/lib/postgresql/share/postgresql/extension"
+  register: parent_dir_debug
+  become: yes
+  when: stage2_nix
+
+- name: Display parent directory permissions
+  debug:
+    var: parent_dir_debug.stdout_lines
+  when: stage2_nix
+
+
+### Test1 Block Sunday 23 -- added the below 
+
+### last added
+- name: Ensure parent directories are accessible
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: '0755'
+  loop:
+    - "/usr/lib/postgresql"
+    - "/usr/lib/postgresql/share"
+    - "/usr/lib/postgresql/share/postgresql"
+    - "/usr/lib/postgresql/share/postgresql/extension"
+  become: yes
+  when: stage2_nix
+
+- name: Test access to plpgsql.control
+  become: yes
+  become_user: postgres
+  shell: "cat /usr/lib/postgresql/share/postgresql/extension/plpgsql.control > /dev/null || echo 'Access denied'"
+  register: access_test
+  ignore_errors: yes
+  when: stage2_nix
+
+- name: Display access test result
+  debug:
+    var: access_test.stdout
+  when: stage2_nix
 
 - name: Initialize the database
   become: yes

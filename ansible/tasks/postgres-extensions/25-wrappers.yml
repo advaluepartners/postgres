@@ -1,0 +1,34 @@
+- name: Install wrappers
+  block:
+    - name: Debug existing APT sources
+      command: "cat /etc/apt/sources.list /etc/apt/sources.list.d/*.list"
+      register: apt_sources
+      changed_when: false
+      ignore_errors: yes
+
+    - name: Show APT sources
+      debug:
+        var: apt_sources.stdout_lines
+
+    - name: Add PostgreSQL GPG key
+      apt_key:
+        url: "https://www.postgresql.org/media/keys/ACCC4CF8.asc"
+        state: present
+      become: yes
+
+    - name: Update APT cache with detailed output
+      command: "apt-get update"
+      register: apt_update_output
+      ignore_errors: yes
+      changed_when: false
+
+    - name: Debug APT update output
+      debug:
+        msg: |
+          stdout: {{ apt_update_output.stdout | default('No stdout') }}
+          stderr: {{ apt_update_output.stderr | default('No stderr') }}
+
+    - name: Fail if APT update failed
+      fail:
+        msg: "APT update failed: {{ apt_update_output.stderr | default('No stderr available') }}"
+      when: apt_update_output.rc != 0

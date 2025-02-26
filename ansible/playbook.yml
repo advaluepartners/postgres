@@ -52,19 +52,31 @@
     #   shell: |
     #     sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile install github:supabase/postgres/{{ git_commit_sha }}#psql_15.exts" -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile install github:supabase/postgres/{{ git_commit_sha }}#psql_15/exts.supautils"
 
-    - name: Install PostgreSQL development files from local flake
-      become: yes
-      shell: |
-        sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && \
-          nix profile install /tmp/ansible-playbook#psql_15.exts && \
-          nix profile install /tmp/ansible-playbook#psql_15.exts.supautils"
-      when: stage2_nix
-      register: install_exts
-      retries: 3
-      delay: 5
-      until: install_exts.rc == 0
+    # - name: Install PostgreSQL development files from local flake
+    #   become: yes
+    #   shell: |
+    #     sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && \
+    #       nix profile install /tmp/ansible-playbook#psql_15.exts && \
+    #       nix profile install /tmp/ansible-playbook#psql_15.exts.supautils"
+    #   when: stage2_nix
+    #   register: install_exts
+    #   retries: 3
+    #   delay: 5
+    #   until: install_exts.rc == 0
 
-    # - name: Create PostgreSQL include structure
+    # # - name: Create PostgreSQL include structure
+    # #   file:
+    # #     path: "{{ item }}"
+    # #     state: directory
+    # #     owner: postgres
+    # #     group: postgres
+    # #     mode: '0755'
+    # #   with_items:
+    # #     - /usr/lib/postgresql/include
+    # #     - /usr/lib/postgresql/include/server
+    # #   when: stage2_nix
+
+    # - name: Ensure PostgreSQL include directories exist
     #   file:
     #     path: "{{ item }}"
     #     state: directory
@@ -76,35 +88,22 @@
     #     - /usr/lib/postgresql/include/server
     #   when: stage2_nix
 
-    - name: Ensure PostgreSQL include directories exist
-      file:
-        path: "{{ item }}"
-        state: directory
-        owner: postgres
-        group: postgres
-        mode: '0755'
-      with_items:
-        - /usr/lib/postgresql/include
-        - /usr/lib/postgresql/include/server
-      when: stage2_nix
+    # - name: Create symlink for PostgreSQL include directory
+    #   file:
+    #     src: "/var/lib/postgresql/.nix-profile/include"
+    #     dest: "/usr/lib/postgresql/include"
+    #     state: link
+    #     owner: postgres
+    #     group: postgres
+    #     mode: '0755'
+    #   become: yes
+    #   when: stage2_nix
 
-    - name: Create symlink for PostgreSQL include directory
-      file:
-        src: "/var/lib/postgresql/.nix-profile/include"
-        dest: "/usr/lib/postgresql/include"
-        state: link
-        owner: postgres
-        group: postgres
-        mode: '0755'
-      become: yes
-      when: stage2_nix
-
-    - name: Link PostgreSQL headers
-      shell: |
-        cp -r /var/lib/postgresql/.nix-profile/include/* /usr/lib/postgresql/include/server/
-      become: yes
-      when: stage2_nix
-
+    # - name: Link PostgreSQL headers
+    #   shell: |
+    #     cp -r /var/lib/postgresql/.nix-profile/include/* /usr/lib/postgresql/include/server/
+    #   become: yes
+    #   when: stage2_nix
 
     - name: Install PgBouncer
       import_tasks: tasks/setup-pgbouncer.yml
@@ -351,11 +350,32 @@
         executable: /bin/bash
       when: stage2_nix
 
-    - name: Run migrations
-      import_tasks: tasks/setup-migrations.yml
-      tags:
-        - migrations
-      when: debpkg_mode or stage2_nix
+    - name: Setup and add extensions
+      import_tasks: tasks/setup-extensions.yml
+      when: stage2_nix
+
+    # - name: Ensure extension directory has correct ownership
+    #   file:
+    #     path: "/usr/lib/postgresql/share/postgresql/extension"
+    #     owner: postgres
+    #     group: postgres
+    #     recurse: yes
+    #   become: yes
+    #   when: stage2_nix
+
+    # - name: Ensure extension files have correct permissions
+    #   file:
+    #     path: "/usr/lib/postgresql/share/postgresql/extension"
+    #     mode: '0644'
+    #     recurse: yes
+    #   become: yes
+    #   when: stage2_nix
+
+    # - name: Run migrations
+    #   import_tasks: tasks/setup-migrations.yml
+    #   tags:
+    #     - migrations
+    #   when: debpkg_mode or stage2_nix
 
     # - name: Stop Postgres Database without Systemd
     #   become: yes

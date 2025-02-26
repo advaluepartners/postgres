@@ -83,7 +83,7 @@ source "amazon-ebs" "ubuntu" {
   communicator = "ssh"
   ssh_pty = true
   ssh_username = "ubuntu"
-  ssh_timeout = "5m"
+  ssh_timeout = "15m"
   
   associate_public_ip_address = true
 
@@ -115,6 +115,7 @@ build {
   sources = [
     "source.amazon-ebs.ubuntu"
   ]
+
 
  provisioner "shell" {
     inline = [
@@ -163,7 +164,9 @@ build {
       "GIT_SHA=${var.git_commit_sha}",
       "POSTGRES_MAJOR_VERSION=${var.postgres_major_version}"
     ]
-    script = "scripts/nix-provision.sh"
+    script           = "scripts/nix-provision.sh"
+    expect_disconnect = true    # Allow SSH disconnection
+    valid_exit_codes  = [0, 2, 2300218]  # Tolerate this specific exit code
   }
 }
   

@@ -128,14 +128,11 @@
     var: lib_contents.stdout_lines
   when: stage2_nix
 
-- name: Create PostgreSQL symlinks for Nix profile
+- name: Create ARM64 specific symlinks
   file:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
     state: link
-    owner: postgres
-    group: postgres
-    mode: '0755'
   with_items:
     - { src: "/var/lib/postgresql/.nix-profile/lib", dest: "/usr/lib/postgresql/lib" }
     - { src: "/var/lib/postgresql/.nix-profile/include", dest: "/usr/lib/postgresql/include" }
@@ -204,27 +201,29 @@
 #     - "/usr/lib/postgresql/share"
 #   when: stage2_nix
 
-- name: Create ARM64 specific symlinks
-  file:
-    src: "{{ item.src }}"
-    dest: "{{ item.dest }}"
-    state: link
-  with_items:
-    - { src: "/var/lib/postgresql/.nix-profile/lib/aarch64-linux-gnu", dest: "/usr/lib/postgresql/lib" }
-    - { src: "/var/lib/postgresql/.nix-profile/include", dest: "/usr/lib/postgresql/include" }
-  when: stage2_nix
+# - name: Create ARM64 specific symlinks
+#   file:
+#     src: "{{ item.src }}"
+#     dest: "{{ item.dest }}"
+#     state: link
+#   with_items:
+#     - { src: "/var/lib/postgresql/.nix-profile/lib/aarch64-linux-gnu", dest: "/usr/lib/postgresql/lib" }
+#     - { src: "/var/lib/postgresql/.nix-profile/include", dest: "/usr/lib/postgresql/include" }
+#   when: stage2_nix
 
 - name: Install debug symbols for postgres version
   become: yes
   shell: |
-    sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile install github:supabase/postgres/{{ git_commit_sha }}#{{postgresql_version}}_debug"
-  when: stage2_nix
+    sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile install github:supabase/postgres/{{ git_commit_sha }}#{{ postgresql_version }}_debug"
+  when:
+    - stage2_nix
+    - ansible_architecture != 'aarch64'
 
-- name: Install source files for postgresql version
-  become: yes
-  shell: |
-    sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile install github:supabase/postgres/{{ git_commit_sha }}#{{postgresql_version}}_src"
-  when: stage2_nix
+# - name: Install source files for postgresql version
+#   become: yes
+#   shell: |
+#     sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile install github:supabase/postgres/{{ git_commit_sha }}#{{postgresql_version}}_src"
+#   when: stage2_nix
   
 - name: Set ownership and permissions for /etc/ssl/private
   become: yes
@@ -373,15 +372,264 @@
   become: yes
   when: stage2_nix
 
-- name: Create symbolic links from /var/lib/postgresql/.nix-profile/share/postgresql/extension to /usr/lib/postgresql/share/postgresql/extension
-  file:
-    src: "{{ item }}"
-    dest: "/usr/lib/postgresql/share/postgresql/extension/{{ item | basename }}"
-    state: link
-  with_fileglob:
-    - "/var/lib/postgresql/.nix-profile/share/postgresql/extension/*"
-  become: yes
+### Test2 Anthropic Block Tuesday 25 --  // out this one block 
+
+# - name: Create symbolic links from /var/lib/postgresql/.nix-profile/share/postgresql/extension to /usr/lib/postgresql/share/postgresql/extension
+#   file:
+#     src: "{{ item }}"
+#     dest: "/usr/lib/postgresql/share/postgresql/extension/{{ item | basename }}"
+#     state: link
+#   with_fileglob:
+#     - "/var/lib/postgresql/.nix-profile/share/postgresql/extension/*"
+#   become: yes
+#   when: stage2_nix
+
+- name: Ensure all PostgreSQL extensions are properly linked from Nix
+  block:
+    - name: Create required PostgreSQL library directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: '0755'
+      loop:
+        - "/usr/lib/postgresql/lib"
+        - "/usr/lib/postgresql/share/postgresql/extension"
+
+    # First find all extension libraries (.so files)
+    - name: Find all extension shared libraries in Nix profile
+      shell: |
+        find /var/lib/postgresql/.nix-profile -name "*.so" | grep -v "lib/lib"
+      register: extension_libs_search
+      changed_when: false
+      failed_when: false
+
+    - name: Show found extension libraries
+      debug:
+        var: extension_libs_search.stdout_lines
+
+    # Copy all extension libraries to PostgreSQL lib directory
+    - name: Link all extension shared libraries to PostgreSQL lib directory
+      shell: |
+        if [ -n "{{ extension_libs_search.stdout }}" ]; then
+          for lib in {{ extension_libs_search.stdout_lines | join(' ') }}; do
+            # Get the basename of the library
+            lib_name=$(basename "$lib")
+            # Copy the library to PostgreSQL lib directory
+            cp -f "$lib" /usr/lib/postgresql/lib/
+            chmod 755 /usr/lib/postgresql/lib/"$lib_name"
+            chown postgres:postgres /usr/lib/postgresql/lib/"$lib_name"
+            echo "Copied $lib_name"
+          done
+        else
+          echo "No extension libraries found"
+        fi
+      register: extension_libs_copy
+      when: extension_libs_search.stdout != ""
+
+    # Find all extension files (.control, .sql)
+    - name: Find all extension control files in Nix profile
+      shell: |
+        find /var/lib/postgresql/.nix-profile -path "*/extension/*" | grep -E '\.control$|\.sql$'
+      register: extension_files_search
+      changed_when: false
+      failed_when: false
+
+    - name: Show found extension files
+      debug:
+        var: extension_files_search.stdout_lines
+
+    # Copy all extension files to PostgreSQL extension directory
+    - name: Link all extension files to PostgreSQL extension directory
+      shell: |
+        if [ -n "{{ extension_files_search.stdout }}" ]; then
+          for ext_file in {{ extension_files_search.stdout_lines | join(' ') }}; do
+            # Get the basename of the extension file
+            ext_name=$(basename "$ext_file")
+            # Copy the extension file to PostgreSQL extension directory
+            cp -f "$ext_file" /usr/lib/postgresql/share/postgresql/extension/
+            chmod 644 /usr/lib/postgresql/share/postgresql/extension/"$ext_name"
+            chown postgres:postgres /usr/lib/postgresql/share/postgresql/extension/"$ext_name"
+            echo "Copied $ext_name"
+          done
+        else
+          echo "No extension files found"
+        fi
+      register: extension_files_copy
+      when: extension_files_search.stdout != ""
+
+    # Special handling for extension-specific directories (like postgis)
+    - name: Find extension directories in Nix profile
+      shell: |
+        find /var/lib/postgresql/.nix-profile -path "*/postgresql/contrib/*" -type d
+      register: extension_dirs_search
+      changed_when: false
+      failed_when: false
+
+    - name: Show found extension directories
+      debug:
+        var: extension_dirs_search.stdout_lines
+
+    - name: Create extension directories in PostgreSQL
+      file:
+        path: "/usr/lib/postgresql/share/postgresql/contrib"
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: '0755'
+      when: extension_dirs_search.stdout != ""
+
+    - name: Copy extension directories to PostgreSQL
+      shell: |
+        if [ -n "{{ extension_dirs_search.stdout }}" ]; then
+          for dir in {{ extension_dirs_search.stdout_lines | join(' ') }}; do
+            # Get the basename of the directory
+            dir_name=$(basename "$dir")
+            # Create the directory in PostgreSQL contrib directory
+            mkdir -p /usr/lib/postgresql/share/postgresql/contrib/"$dir_name"
+            # Copy all files from the directory
+            cp -rf "$dir"/* /usr/lib/postgresql/share/postgresql/contrib/"$dir_name"/
+            chmod -R 755 /usr/lib/postgresql/share/postgresql/contrib/"$dir_name"
+            chown -R postgres:postgres /usr/lib/postgresql/share/postgresql/contrib/"$dir_name"
+            echo "Copied directory $dir_name"
+          done
+        else
+          echo "No extension directories found"
+        fi
+      register: extension_dirs_copy
+      when: extension_dirs_search.stdout != ""
+
+    # Verify key extensions
+    - name: Verify key extension files
+      shell: |
+        echo "=== Checking Extension Files ==="
+        echo "PgAudit:"
+        ls -la /usr/lib/postgresql/lib/pgaudit* 2>/dev/null || echo "PgAudit lib not found"
+        ls -la /usr/lib/postgresql/share/postgresql/extension/pgaudit* 2>/dev/null || echo "PgAudit extension not found"
+        
+        echo "PostGIS:"
+        ls -la /usr/lib/postgresql/lib/postgis* 2>/dev/null || echo "PostGIS lib not found"
+        ls -la /usr/lib/postgresql/share/postgresql/extension/postgis* 2>/dev/null || echo "PostGIS extension not found"
+        
+        echo "plpgsql:"
+        ls -la /usr/lib/postgresql/share/postgresql/extension/plpgsql* 2>/dev/null || echo "plpgsql extension not found"
+      register: extension_check
+      changed_when: false
+      ignore_errors: yes
+
+    - name: Show extension check results
+      debug:
+        var: extension_check.stdout_lines
+
+    # As a fallback, try a more direct approach for copying all extension files
+    - name: Direct copy of extension files from Nix profile (fallback)
+      shell: |
+        cp -rf /var/lib/postgresql/.nix-profile/share/postgresql/extension/* /usr/lib/postgresql/share/postgresql/extension/ || echo "No extension files to copy"
+        if [ -d "/var/lib/postgresql/.nix-profile/lib/postgresql" ]; then
+          cp -rf /var/lib/postgresql/.nix-profile/lib/postgresql/* /usr/lib/postgresql/lib/ || echo "No library files to copy"
+        fi
+        find /var/lib/postgresql/.nix-profile -name "*.so" -exec cp -f {} /usr/lib/postgresql/lib/ \; || echo "No .so files found"
+        chown -R postgres:postgres /usr/lib/postgresql/lib/
+        chown -R postgres:postgres /usr/lib/postgresql/share/
+        chmod -R 755 /usr/lib/postgresql/lib/
+        chmod -R 755 /usr/lib/postgresql/share/
+      ignore_errors: yes
   when: stage2_nix
+
+- name: Direct install of pgaudit as fallback
+  block:
+    - name: Temporarily remove pgaudit from shared_preload_libraries
+      become: yes
+      become_user: postgres
+      replace:
+        path: /etc/postgresql/postgresql.conf
+        regexp: '(shared_preload_libraries\s*=\s*[''"].*),?\s*pgaudit(.*[''"])'
+        replace: '\1\2'
+      
+    - name: Create pgaudit directory
+      file:
+        path: "/usr/lib/postgresql/lib"
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: '0755'
+
+    - name: Find all extensions inside Nix store
+      shell: |
+        find /nix/store -name "pgaudit.so" -o -name "pgaudit*control" 2>/dev/null || echo "Not found"
+      register: nix_store_search
+      changed_when: false
+
+    - name: Show Nix store search results
+      debug:
+        var: nix_store_search.stdout_lines
+  
+    - name: Use an alternative approach to copy extensions from Nix
+      shell: |
+        echo "=== Finding Nix packages ==="
+        cp -v /var/lib/postgresql/.nix-profile/lib/*.so* /usr/lib/postgresql/lib/ 2>/dev/null || echo "No .so files found"
+        mkdir -p /usr/lib/postgresql/share/postgresql/extension
+        cp -v /var/lib/postgresql/.nix-profile/share/postgresql/extension/* /usr/lib/postgresql/share/postgresql/extension/ 2>/dev/null || echo "No extension files found"
+        find /nix/store -path "*/postgresql/extension/pgaudit*.control" -exec cp -v {} /usr/lib/postgresql/share/postgresql/extension/ \; 2>/dev/null || echo "No control files found"
+        find /nix/store -path "*/lib/pgaudit.so" -exec cp -v {} /usr/lib/postgresql/lib/ \; 2>/dev/null || echo "No lib files found"
+        chmod 755 /usr/lib/postgresql/lib/*.so* 2>/dev/null || true
+        chmod 644 /usr/lib/postgresql/share/postgresql/extension/* 2>/dev/null || true
+        chown -R postgres:postgres /usr/lib/postgresql/lib/
+        chown -R postgres:postgres /usr/lib/postgresql/share/
+      ignore_errors: yes
+
+    - name: Verify installation after direct copy
+      shell: |
+        echo "=== Library files ==="
+        ls -la /usr/lib/postgresql/lib/ || echo "No directory"
+        echo "=== Extension files ==="
+        ls -la /usr/lib/postgresql/share/postgresql/extension/ || echo "No directory"
+      register: direct_copy_check
+      changed_when: false
+
+    - name: Show direct copy results
+      debug:
+        var: direct_copy_check.stdout_lines
+  when: stage2_nix
+
+- name: Fix permissions for all PostgreSQL extension files
+  block:
+    - name: Ensure correct permissions for extension directory
+      file:
+        path: "/usr/lib/postgresql/share/postgresql/extension"
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: '0755'
+        recurse: no
+
+    - name: Fix permissions for extension files
+      shell: |
+        find /usr/lib/postgresql/share/postgresql/extension -type f -exec chmod 644 {} \;
+        find /usr/lib/postgresql/share/postgresql/extension -type f -exec chown postgres:postgres {} \;
+        find /usr/lib/postgresql/lib -name "*.so*" -exec chmod 755 {} \; 2>/dev/null || true
+        find /usr/lib/postgresql/lib -name "*.so*" -exec chown postgres:postgres {} \; 2>/dev/null || true
+      become: yes
+
+    - name: Verify fixed permissions
+      shell: |
+        echo "=== Extension directory permissions ==="
+        ls -la /usr/lib/postgresql/share/postgresql/extension/
+        echo "=== pgtap.control permissions ==="
+        ls -la /usr/lib/postgresql/share/postgresql/extension/pgtap.control 2>/dev/null || echo "File not found"
+      register: perm_check
+      changed_when: false
+
+    - name: Show permissions check results
+      debug:
+        var: perm_check.stdout_lines
+  when: stage2_nix
+
+
+
+### Test2 Anthropic Block Tuesday 25 --  // out this one block 
+
 
 - name: create destination directory
   file:
@@ -396,13 +644,39 @@
       set_fact:
         is_psql_oriole: "{{ psql_version == 'psql_orioledb-17' }}"
 
+    - name: Install PostGIS from nixpkgs
+      become: yes
+      shell: |
+        sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile install nixpkgs#postgresql15Packages.postgis"
+      when: stage2_nix and not is_psql_oriole and ansible_architecture != 'aarch64'
+      register: install_postgis
+      retries: 3
+      delay: 5
+      until: install_postgis.rc == 0
+
+    - name: Skip PostGIS on ARM64
+      debug:
+        msg: "Skipping PostGIS installation on ARM64 as it’s not available in nixpkgs"
+      when: stage2_nix and not is_psql_oriole and ansible_architecture == 'aarch64'
+
+    - name: Debug contrib directory contents
+      shell: "ls -l /var/lib/postgresql/.nix-profile/share/postgresql/contrib/ || echo 'Contrib directory not found'"
+      register: contrib_debug
+      become: yes
+      when: stage2_nix and not is_psql_oriole and ansible_architecture != 'aarch64'
+
+    - name: Show contrib directory contents
+      debug:
+        var: contrib_debug.stdout_lines
+      when: stage2_nix and not is_psql_oriole and ansible_architecture != 'aarch64'
+
     - name: Recursively create symbolic links and set permissions for the contrib/postgis-* dir
       shell: >
         sudo mkdir -p /usr/lib/postgresql/share/postgresql/contrib && \
         sudo find /var/lib/postgresql/.nix-profile/share/postgresql/contrib/ -mindepth 1 -type d -exec sh -c 'for dir do sudo ln -s "$dir" "/usr/lib/postgresql/share/postgresql/contrib/$(basename "$dir")"; done' sh {} + \
         && chown -R postgres:postgres "/usr/lib/postgresql/share/postgresql/contrib/"
       become: yes
-      when: stage2_nix and not is_psql_oriole
+      when: stage2_nix and not is_psql_oriole and ansible_architecture != 'aarch64'
 
 - name: Create symbolic links from /var/lib/postgresql/.nix-profile/share/postgresql/timezonesets to /usr/lib/postgresql/share/postgresql/timeszonesets
   file:

@@ -1,92 +1,3 @@
-# # supautils
-# - name: supautils - download & install dependencies
-#   apt:
-#     pkg:
-#       - build-essential
-#       - clang-11
-#     update_cache: yes
-#     cache_valid_time: 3600
-#   when: stage2_nix
-
-# - name: supautils - download source
-#   get_url:
-#     url: "https://github.com/supabase/supautils/archive/refs/tags/v2.6.0.tar.gz"
-#     dest: /tmp/supautils-2.6.0.tar.gz
-#     timeout: 60
-#   when: stage2_nix
-
-# - name: supautils - unpack archive
-#   unarchive:
-#     remote_src: yes
-#     src: /tmp/supautils-2.6.0.tar.gz
-#     dest: /tmp
-#   become: yes
-#   when: stage2_nix
-
-# - name: supautils - build
-#   make:
-#     chdir: /tmp/supautils-2.6.0
-#   become: yes
-#   when: stage2_nix
-
-# - name: supautils - install
-#   make:
-#     chdir: /tmp/supautils-2.6.0
-#     target: install
-#   become: yes
-#   when: stage2_nix
-
-# - name: supautils - add supautils to session_preload_libraries
-#   become: yes
-#   replace:
-#     path: /etc/postgresql/postgresql.conf
-#     regexp: "#session_preload_libraries = ''"
-#     replace: session_preload_libraries = 'supautils'
-#   when: stage2_nix
-
-# - name: supautils - write custom supautils.conf
-#   template:
-#     src: "files/postgresql_config/supautils.conf.j2"
-#     dest: /etc/postgresql-custom/supautils.conf
-#     mode: 0664
-#     owner: postgres
-#     group: postgres
-#   when: stage2_nix
-
-# - name: supautils - copy extension custom scripts
-#   copy:
-#     src: files/postgresql_extension_custom_scripts/
-#     dest: /etc/postgresql-custom/extension-custom-scripts
-#     owner: postgres
-#     group: postgres
-#     mode: '0775'
-#   become: yes
-#   when: stage2_nix
-
-# - name: supautils - chown extension custom scripts
-#   file:
-#     mode: 0775
-#     owner: postgres
-#     group: postgres
-#     path: /etc/postgresql-custom/extension-custom-scripts
-#     recurse: yes
-#   become: yes
-#   when: stage2_nix
-
-# - name: supautils - include /etc/postgresql-custom/supautils.conf in postgresql.conf
-#   become: yes
-#   replace:
-#     path: /etc/postgresql/postgresql.conf
-#     regexp: "#include = '/etc/postgresql-custom/supautils.conf'"
-#     replace: "include = '/etc/postgresql-custom/supautils.conf'"
-#   when: stage2_nix
-
-# - name: Remove build artifacts
-#   file:
-#     path: "/tmp/supautils-2.6.0"
-#     state: absent
-#   when: stage2_nix
-
 # supautils
 - name: supautils - download & install dependencies
   apt:
@@ -95,35 +6,35 @@
       - clang-11
     update_cache: yes
     cache_valid_time: 3600
+  when: stage2_nix
 
-- name: supautils - download latest release
+- name: supautils - download source
   get_url:
-    url: "https://github.com/supabase/supautils/archive/refs/tags/v{{ supautils_release }}.tar.gz"
-    dest: /tmp/supautils-{{ supautils_release }}.tar.gz
-    checksum: "{{ supautils_release_checksum }}"
+    url: "https://github.com/supabase/supautils/archive/refs/tags/v2.6.0.tar.gz"
+    dest: /tmp/supautils-2.6.0.tar.gz
     timeout: 60
+  when: stage2_nix
 
 - name: supautils - unpack archive
   unarchive:
     remote_src: yes
-    src: /tmp/supautils-{{ supautils_release }}.tar.gz
+    src: /tmp/supautils-2.6.0.tar.gz
     dest: /tmp
   become: yes
+  when: stage2_nix
 
 - name: supautils - build
   make:
-    chdir: /tmp/supautils-{{ supautils_release }}
-    params:
-      CPPFLAGS: "-I/usr/lib/postgresql/include/server"
-  environment:
-    PG_CONFIG: /usr/bin/pg_config
+    chdir: /tmp/supautils-2.6.0
   become: yes
+  when: stage2_nix
 
 - name: supautils - install
   make:
-    chdir: /tmp/supautils-{{ supautils_release }}
+    chdir: /tmp/supautils-2.6.0
     target: install
   become: yes
+  when: stage2_nix
 
 - name: supautils - add supautils to session_preload_libraries
   become: yes
@@ -131,6 +42,7 @@
     path: /etc/postgresql/postgresql.conf
     regexp: "#session_preload_libraries = ''"
     replace: session_preload_libraries = 'supautils'
+  when: stage2_nix
 
 - name: supautils - write custom supautils.conf
   template:
@@ -139,12 +51,17 @@
     mode: 0664
     owner: postgres
     group: postgres
+  when: stage2_nix
 
 - name: supautils - copy extension custom scripts
   copy:
     src: files/postgresql_extension_custom_scripts/
     dest: /etc/postgresql-custom/extension-custom-scripts
+    owner: postgres
+    group: postgres
+    mode: '0775'
   become: yes
+  when: stage2_nix
 
 - name: supautils - chown extension custom scripts
   file:
@@ -154,6 +71,7 @@
     path: /etc/postgresql-custom/extension-custom-scripts
     recurse: yes
   become: yes
+  when: stage2_nix
 
 - name: supautils - include /etc/postgresql-custom/supautils.conf in postgresql.conf
   become: yes
@@ -161,10 +79,93 @@
     path: /etc/postgresql/postgresql.conf
     regexp: "#include = '/etc/postgresql-custom/supautils.conf'"
     replace: "include = '/etc/postgresql-custom/supautils.conf'"
+  when: stage2_nix
 
-- name: supautils - remove build dependencies
-  apt:
-    pkg:
-      - build-essential
-      - clang-11
+- name: Remove build artifacts
+  file:
+    path: "/tmp/supautils-2.6.0"
     state: absent
+  when: stage2_nix
+
+
+# supautils
+# - name: supautils - download & install dependencies
+#   apt:
+#     pkg:
+#       - build-essential
+#       - clang-11
+#     update_cache: yes
+#     cache_valid_time: 3600
+
+# - name: supautils - download latest release
+#   get_url:
+#     url: "https://github.com/supabase/supautils/archive/refs/tags/v{{ supautils_release }}.tar.gz"
+#     dest: /tmp/supautils-{{ supautils_release }}.tar.gz
+#     checksum: "{{ supautils_release_checksum }}"
+#     timeout: 60
+
+# - name: supautils - unpack archive
+#   unarchive:
+#     remote_src: yes
+#     src: /tmp/supautils-{{ supautils_release }}.tar.gz
+#     dest: /tmp
+#   become: yes
+
+# - name: supautils - build
+#   make:
+#     chdir: /tmp/supautils-{{ supautils_release }}
+#     params:
+#       CPPFLAGS: "-I$(/usr/bin/pg_config --includedir-server) -I/usr/include"
+#     environment:
+#       PG_CONFIG: /usr/bin/pg_config
+#   become: yes
+
+# - name: supautils - install
+#   make:
+#     chdir: /tmp/supautils-{{ supautils_release }}
+#     target: install
+#   become: yes
+
+# - name: supautils - add supautils to session_preload_libraries
+#   become: yes
+#   replace:
+#     path: /etc/postgresql/postgresql.conf
+#     regexp: "#session_preload_libraries = ''"
+#     replace: session_preload_libraries = 'supautils'
+
+# - name: supautils - write custom supautils.conf
+#   template:
+#     src: "files/postgresql_config/supautils.conf.j2"
+#     dest: /etc/postgresql-custom/supautils.conf
+#     mode: 0664
+#     owner: postgres
+#     group: postgres
+
+# - name: supautils - copy extension custom scripts
+#   copy:
+#     src: files/postgresql_extension_custom_scripts/
+#     dest: /etc/postgresql-custom/extension-custom-scripts
+#   become: yes
+
+# - name: supautils - chown extension custom scripts
+#   file:
+#     mode: 0775
+#     owner: postgres
+#     group: postgres
+#     path: /etc/postgresql-custom/extension-custom-scripts
+#     recurse: yes
+#   become: yes
+
+# - name: supautils - include /etc/postgresql-custom/supautils.conf in postgresql.conf
+#   become: yes
+#   replace:
+#     path: /etc/postgresql/postgresql.conf
+#     regexp: "#include = '/etc/postgresql-custom/supautils.conf'"
+#     replace: "include = '/etc/postgresql-custom/supautils.conf'"
+
+# - name: supautils - remove build dependencies
+#   apt:
+#     pkg:
+#       - build-essential
+#       - clang-11
+#     state: absent
