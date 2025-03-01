@@ -319,7 +319,10 @@
             SUPAUTILS_CONF_FILE = "${paths.supautilsConfigFile}";
             PG_HBA = "${paths.pgHbaConfigFile}";
             PG_IDENT = "${paths.pgIdentConfigFile}";
-            LOCALES = "${localeArchive}";
+            #LOCALES = "${localeArchive}";
+            PG_LOCALE = "C";
+            LC_ALL = "C";
+            LANG = "C";
             EXTENSION_CUSTOM_SCRIPTS_DIR = "${paths.postgresqlExtensionCustomScriptsPath}";
             MECAB_LIB = "${basePackages.psql_15.exts.pgroonga}/lib/groonga/plugins/tokenizers/tokenizer_mecab.so";
             GROONGA_DIR = "${supabase-groonga}";

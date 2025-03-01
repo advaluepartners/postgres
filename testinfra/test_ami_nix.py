@@ -248,7 +248,7 @@ runcmd:
 
     ec2logger = EC2InstanceConnectLogger(debug=False)
     temp_key = EC2InstanceConnectKey(ec2logger.get_logger())
-    ec2ic = boto3.client("ec2-instance-connect", region_name="ap-southeast-1")
+    ec2ic = boto3.client("ec2-instance-connect", region_name="us-east-1")
     response = ec2ic.send_ssh_public_key(
         InstanceId=instance.id,
         InstanceOSUser="ubuntu",

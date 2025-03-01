@@ -17,8 +17,20 @@
     
   environment:
     PATH: /usr/lib/postgresql/bin:{{ ansible_env.PATH }}
-    
+
   tasks:
+    # New tasks to ensure git is installed and clone the repository
+    - name: Ensure git is installed
+      apt:
+        name: git
+        state: present
+
+    - name: Clone advaluepartners/postgres repo
+      git:
+        repo: 'https://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@github.com/advaluepartners/postgres.git'
+        dest: /usr/local/src/advaluepartners-postgres
+        version: main
+  
     - set_fact:
         supabase_internal: true
       tags:
@@ -338,10 +350,14 @@
       become_user: postgres
       ansible.builtin.shell: |
         # Export environment variables inline
-        export LANG=en_US.UTF-8
-        export LANGUAGE=en_US:en
-        export LC_ALL=en_US.UTF-8
-        export LC_CTYPE=en_US.UTF-8
+        # export LANG=en_US.UTF-8
+        # export LANGUAGE=en_US:en
+        # export LC_ALL=en_US.UTF-8
+        # export LC_CTYPE=en_US.UTF-8
+        export LANG=C
+        export LANGUAGE=C
+        export LC_ALL=C
+        export LC_CTYPE=C
         export LOCALE_ARCHIVE=/usr/lib/locale/locale-archive
         # Use the POSIX "." operator instead of "source"
         . /var/lib/postgresql/.bashrc

@@ -167,10 +167,16 @@ CURRENT_SYSTEM=@CURRENT_SYSTEM@
 
 # Set locale environment
 export LOCALE_ARCHIVE
-export LANG=en_US.UTF-8
-export LANGUAGE=en_US.UTF-8
-export LC_ALL=en_US.UTF-8
-export LC_CTYPE=en_US.UTF-8
+#export LANG=en_US.UTF-8
+#export LANGUAGE=en_US.UTF-8
+#export LC_ALL=en_US.UTF-8
+#export LC_CTYPE=en_US.UTF-8
+# Set locale environment
+export LOCALE_ARCHIVE
+export LANG=C
+export LANGUAGE=C
+export LC_ALL=C
+export LC_CTYPE=C
 export KEY_FILE="$DATDIR/pgsodium.key"
 echo "KEY_FILE: $KEY_FILE"
 echo "KEY_FILE contents:"
@@ -186,11 +192,14 @@ if [ "$VERSION" = "orioledb-17" ]; then
     initdb -D "$DATDIR" \
         --allow-group-access \
         --username="$PGSQL_SUPERUSER" \
-        --locale-provider=icu \
-        --encoding=UTF-8 \
-        --icu-locale=en_US.UTF-8
+        #--locale-provider=icu \
+        #--encoding=UTF-8 \
+        #--icu-locale=en_US.UTF-8
+        --locale=C \
+        --encoding=UTF-8
 else
-    initdb -U "$PGSQL_SUPERUSER" -D "$DATDIR"
+    #initdb -U "$PGSQL_SUPERUSER" -D "$DATDIR"
+    initdb -U "$PGSQL_SUPERUSER" -D "$DATDIR" --locale=C --encoding=UTF8
 fi
 
 # Copy configuration files

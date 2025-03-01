@@ -1,36 +1,85 @@
----
-# tasks/postgres-extensions/05-pgaudit.yml
+# # tasks/postgres-extensions/05-pgaudit.yml
 
-- name: pgaudit - ensure extension directory exists
-  file:
-    path: "/usr/lib/postgresql/share/postgresql/extension"
-    state: directory
-    owner: postgres
-    group: postgres
-    mode: '0755'
-  become: yes
-  when: stage2_nix
+# - name: pgaudit - ensure extension directory exists
+#   file:
+#     path: "/usr/lib/postgresql/share/postgresql/extension"
+#     state: directory
+#     owner: postgres
+#     group: postgres
+#     mode: '0755'
+#   become: yes
+#   when: stage2_nix
 
-- name: pgaudit - copy extension from Nix profile
-  shell: |
-    cp -f /var/lib/postgresql/.nix-profile/share/postgresql/extension/pgaudit* /usr/lib/postgresql/share/postgresql/extension/
-    chmod 644 /usr/lib/postgresql/share/postgresql/extension/pgaudit*
-    chown postgres:postgres /usr/lib/postgresql/share/postgresql/extension/pgaudit*
-  become: yes
-  when: stage2_nix
+# - name: pgaudit - copy extension from Nix profile
+#   shell: |
+#     cp -f /var/lib/postgresql/.nix-profile/share/postgresql/extension/pgaudit* /usr/lib/postgresql/share/postgresql/extension/
+#     chmod 644 /usr/lib/postgresql/share/postgresql/extension/pgaudit*
+#     chown postgres:postgres /usr/lib/postgresql/share/postgresql/extension/pgaudit*
+#   become: yes
+#   when: stage2_nix
 
-- name: pgaudit - copy library from Nix profile
-  shell: |
-    cp -f /var/lib/postgresql/.nix-profile/lib/postgresql/pgaudit.so /usr/lib/postgresql/lib/pgaudit.so
-    chmod 755 /usr/lib/postgresql/lib/pgaudit.so
-    chown postgres:postgres /usr/lib/postgresql/lib/pgaudit.so
-  become: yes
-  when: stage2_nix
+# - name: pgaudit - copy library from Nix profile
+#   shell: |
+#     cp -f /var/lib/postgresql/.nix-profile/lib/postgresql/pgaudit.so /usr/lib/postgresql/lib/pgaudit.so
+#     chmod 755 /usr/lib/postgresql/lib/pgaudit.so
+#     chown postgres:postgres /usr/lib/postgresql/lib/pgaudit.so
+#   become: yes
+#   when: stage2_nix
 
-- name: pgaudit - ensure shared_preload_libraries includes pgaudit
-  lineinfile:
-    path: /etc/postgresql/postgresql.conf
-    regexp: '^shared_preload_libraries\s*='
-    line: "shared_preload_libraries = 'pgaudit'"
-    backrefs: yes
-  when: stage2_nix
+# - name: pgaudit - ensure shared_preload_libraries includes pgaudit
+#   lineinfile:
+#     path: /etc/postgresql/postgresql.conf
+#     regexp: '^shared_preload_libraries\s*='
+#     line: "shared_preload_libraries = 'pgaudit'"
+#     backrefs: yes
+#   when: stage2_nix
+
+- name: pgaudit - copy extension from Nix profile (with improved error handling)
+  block:
+    - name: Check if pgaudit files exist in primary location
+      shell: |
+        ls -la /var/lib/postgresql/.nix-profile/share/postgresql/extension/pgaudit* 2>/dev/null || echo "not found"
+      register: pgaudit_files_check
+      changed_when: false
+      ignore_errors: yes
+
+    - name: Copy pgaudit files if they exist
+      shell: |
+        cp -f /var/lib/postgresql/.nix-profile/share/postgresql/extension/pgaudit* /usr/lib/postgresql/share/postgresql/extension/
+        chmod 644 /usr/lib/postgresql/share/postgresql/extension/pgaudit*
+        chown postgres:postgres /usr/lib/postgresql/share/postgresql/extension/pgaudit*
+      when: "'not found' not in pgaudit_files_check.stdout"
+
+    - name: Search for pgaudit in alternative locations (if not found in primary location)
+      block:
+        - name: Find pgaudit files in Nix store
+          shell: |
+            find /nix/store -path "*/postgresql/extension/pgaudit*.control" -o -path "*/postgresql/extension/pgaudit*.sql" 2>/dev/null || echo "Not found"
+          register: nix_store_search
+          changed_when: false
+          
+        - name: Copy pgaudit files from alternative locations if found
+          shell: |
+            for file in $(find /nix/store -path "*/postgresql/extension/pgaudit*.control" -o -path "*/postgresql/extension/pgaudit*.sql" 2>/dev/null); do
+              cp -v "$file" /usr/lib/postgresql/share/postgresql/extension/
+              chmod 644 /usr/lib/postgresql/share/postgresql/extension/$(basename "$file")
+              chown postgres:postgres /usr/lib/postgresql/share/postgresql/extension/$(basename "$file")
+            done
+            
+            for lib in $(find /nix/store -path "*/lib/pgaudit.so" 2>/dev/null); do
+              mkdir -p /usr/lib/postgresql/lib
+              cp -v "$lib" /usr/lib/postgresql/lib/
+              chmod 755 /usr/lib/postgresql/lib/pgaudit.so
+              chown postgres:postgres /usr/lib/postgresql/lib/pgaudit.so
+            done
+          when: "'Not found' not in nix_store_search.stdout"
+      when: "'not found' in pgaudit_files_check.stdout"
+      
+  rescue:
+    - name: Handle pgaudit extension failure gracefully
+      debug:
+        msg: "Could not find pgaudit extension files, attempting to continue with general extension handling"
+    
+    - name: Set fact to trigger alternative extension handling
+      set_fact:
+        use_alternative_extension_handling: true

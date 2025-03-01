@@ -9,6 +9,9 @@ After=database-optimizations.service
 [Service]
 Type=notify
 User=postgres
+Group=postgres
+Environment="LANG=C"
+Environment="LC_ALL=C"
 ExecStart=/usr/lib/postgresql/bin/postgres -D /etc/postgresql
 ExecStartPre=+/usr/local/bin/postgres_prestart.sh
 ExecReload=/bin/kill -HUP $MAINPID

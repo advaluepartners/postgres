@@ -94,12 +94,20 @@ function setup_postgesql_env {
     sudo mkdir -p /etc/environment.d
     
     # Define the contents of the PostgreSQL environment file
-    cat <<EOF | sudo tee /etc/environment.d/postgresql.env >/dev/null
-LOCALE_ARCHIVE=/usr/lib/locale/locale-archive
-LANG="en_US.UTF-8"
-LANGUAGE="en_US.UTF-8"
-LC_ALL="en_US.UTF-8"
-LC_CTYPE="en_US.UTF-8"
+#     cat <<EOF | sudo tee /etc/environment.d/postgresql.env >/dev/null
+# LOCALE_ARCHIVE=/usr/lib/locale/locale-archive
+# LANG="en_US.UTF-8"
+# LANGUAGE="en_US.UTF-8"
+# LC_ALL="en_US.UTF-8"
+# LC_CTYPE="en_US.UTF-8"
+# EOF
+# }
+	cat <<EOF | sudo tee /etc/environment.d/postgresql.env >/dev/null
+export LOCALE_ARCHIVE=/usr/lib/locale/locale-archive
+export LANG=C
+export LANGUAGE=C
+export LC_ALL=C
+export LC_CTYPE=C
 EOF
 }
 

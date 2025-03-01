@@ -42,33 +42,66 @@ EOF
 		--extra-vars "psql_version=psql_${POSTGRES_MAJOR_VERSION}"
 }
 
+### Changed Wednesday 26th
+# function setup_postgesql_env {
+# 	# Create the directory if it doesn't exist
+# 	sudo mkdir -p /etc/environment.d
+
+# 	# Define the contents of the PostgreSQL environment file
+# 	cat <<EOF | sudo tee /etc/environment.d/postgresql.env >/dev/null
+# LOCALE_ARCHIVE=/usr/lib/locale/locale-archive
+# LANG="en_US.UTF-8"
+# LANGUAGE="en_US.UTF-8"
+# LC_ALL="en_US.UTF-8"
+# LC_CTYPE="en_US.UTF-8"
+# EOF
+# }
+
+# function setup_locale {
+# 	cat <<EOF >>/etc/locale.gen
+# en_US.UTF-8 UTF-8
+# EOF
+
+# 	cat <<EOF >/etc/default/locale
+# LANG="C.UTF-8"
+# LC_CTYPE="C.UTF-8"
+# EOF
+# 	locale-gen en_US.UTF-8
+# }
+
+# sed -i 's/- hosts: all/- hosts: localhost/' ansible/playbook.yml
+
 function setup_postgesql_env {
 	# Create the directory if it doesn't exist
 	sudo mkdir -p /etc/environment.d
 
 	# Define the contents of the PostgreSQL environment file
 	cat <<EOF | sudo tee /etc/environment.d/postgresql.env >/dev/null
-LOCALE_ARCHIVE=/usr/lib/locale/locale-archive
-LANG="en_US.UTF-8"
-LANGUAGE="en_US.UTF-8"
-LC_ALL="en_US.UTF-8"
-LC_CTYPE="en_US.UTF-8"
+export LOCALE_ARCHIVE=/usr/lib/locale/locale-archive
+export LANG=C
+export LANGUAGE=C
+export LC_ALL=C
+export LC_CTYPE=C
 EOF
 }
 
 function setup_locale {
-	cat <<EOF >>/etc/locale.gen
+	cat <<EOF >/etc/locale.gen
+C.UTF-8 UTF-8
 en_US.UTF-8 UTF-8
 EOF
 
 	cat <<EOF >/etc/default/locale
-LANG="C.UTF-8"
-LC_CTYPE="C.UTF-8"
+LANG=C.UTF-8
+LC_CTYPE=C.UTF-8
 EOF
+	locale-gen C.UTF-8
 	locale-gen en_US.UTF-8
+	update-locale LANG=C.UTF-8 LC_CTYPE=C.UTF-8
 }
 
 sed -i 's/- hosts: all/- hosts: localhost/' ansible/playbook.yml
+
 
 waitfor_boot_finished
 install_packages

@@ -59,8 +59,18 @@
   become: yes
   when: stage2_nix
 
+## Chnaged Wednesday 26
+# - name: configure locales
+#   command: echo "C.UTF-8 UTF-8" > /etc/locale.gen && echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen
+#   become: yes
+#   when: stage2_nix
+
 - name: configure locales
-  command: echo "C.UTF-8 UTF-8" > /etc/locale.gen && echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen
+  copy:
+    dest: /etc/locale.gen
+    content: |
+      C.UTF-8 UTF-8
+      en_US.UTF-8 UTF-8
   become: yes
   when: stage2_nix
 
@@ -70,6 +80,16 @@
 
 - name: update-locale
   command: sudo update-locale
+  when: stage2_nix
+
+- name: Ensure required locales are installed
+  become: yes
+  shell: |
+    apt-get update
+    apt-get install -y locales
+    echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen
+    locale-gen
+    update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
   when: stage2_nix
 
 - name: Create symlink to /usr/lib/postgresql/bin
@@ -465,43 +485,106 @@
       set_fact:
         is_psql_oriole: "{{ psql_version in ['psql_orioledb-16', 'psql_orioledb-17'] }}"
 
+    ##  Wednesday 26th -- capitala config -- 
+    # - name: Initialize the database stage2_nix (non-orioledb)
+    #   become: yes
+    #   become_user: postgres
+    #   shell: source /var/lib/postgresql/.bashrc && /usr/lib/postgresql/bin/pg_ctl -D /var/lib/postgresql/data initdb -o "--allow-group-access" -o "--username=supabase_admin"
+    #   args:
+    #     executable: /bin/bash
+    #   environment:
+    #     LANG: en_US.UTF-8
+    #     LANGUAGE: en_US.UTF-8
+    #     LC_ALL: en_US.UTF-8
+    #     LC_CTYPE: en_US.UTF-8
+    #     LOCALE_ARCHIVE: /usr/lib/locale/locale-archive
+    #   vars:
+    #     ansible_command_timeout: 60
+    #   when: stage2_nix and not is_psql_oriole
+
     - name: Initialize the database stage2_nix (non-orioledb)
       become: yes
       become_user: postgres
-      shell: source /var/lib/postgresql/.bashrc && /usr/lib/postgresql/bin/pg_ctl -D /var/lib/postgresql/data initdb -o "--allow-group-access" -o "--username=supabase_admin"
+      shell: source /var/lib/postgresql/.bashrc && /usr/lib/postgresql/bin/pg_ctl -D /var/lib/postgresql/data initdb -o "--allow-group-access" -o "--username=supabase_admin" -o "--locale=C"
       args:
         executable: /bin/bash
       environment:
-        LANG: en_US.UTF-8
-        LANGUAGE: en_US.UTF-8
-        LC_ALL: en_US.UTF-8
-        LC_CTYPE: en_US.UTF-8
-        LOCALE_ARCHIVE: /usr/lib/locale/locale-archive
+        LANG: C
+        LC_ALL: C
       vars:
         ansible_command_timeout: 60
       when: stage2_nix and not is_psql_oriole
 
-    - name: Initialize the database stage2_nix (orioledb)
-      become: yes
-      become_user: postgres
-      shell: >
-        source /var/lib/postgresql/.bashrc && initdb -D /var/lib/postgresql/data 
-        --allow-group-access 
-        --username=supabase_admin 
-        --locale-provider=icu 
-        --encoding=UTF-8 
-        --icu-locale=en_US.UTF-8 
-      args:
-        executable: /bin/bash
-      environment:
-        LANG: en_US.UTF-8
-        LANGUAGE: en_US.UTF-8
-        LC_ALL: en_US.UTF-8
-        LC_CTYPE: en_US.UTF-8
-        LOCALE_ARCHIVE: /usr/lib/locale/locale-archive
-      vars:
-        ansible_command_timeout: 60
-      when: stage2_nix and is_psql_oriole
+    # - name: Initialize the database stage2_nix (orioledb)
+    #   become: yes
+    #   become_user: postgres
+    #   shell: >
+    #     source /var/lib/postgresql/.bashrc && initdb -D /var/lib/postgresql/data 
+    #     --allow-group-access 
+    #     --username=supabase_admin 
+    #     --locale-provider=icu 
+    #     --encoding=UTF-8 
+    #     --icu-locale=en_US.UTF-8 
+    #   args:
+    #     executable: /bin/bash
+    #   environment:
+    #     LANG: en_US.UTF-8
+    #     LANGUAGE: en_US.UTF-8
+    #     LC_ALL: en_US.UTF-8
+    #     LC_CTYPE: en_US.UTF-8
+    #     LOCALE_ARCHIVE: /usr/lib/locale/locale-archive
+    #   vars:
+    #     ansible_command_timeout: 60
+    #   when: stage2_nix and is_psql_oriole
+
+- name: Initialize the database stage2_nix (orioledb)
+  become: yes
+  become_user: postgres
+  shell: >
+    source /var/lib/postgresql/.bashrc && initdb -D /var/lib/postgresql/data 
+    --allow-group-access 
+    --username=supabase_admin 
+    --locale=C
+    --encoding=UTF8
+  args:
+    executable: /bin/bash
+  environment:
+    LANG: C
+    LC_ALL: C
+  vars:
+    ansible_command_timeout: 60
+  when: stage2_nix and is_psql_oriole
+
+- name: Ensure postgresql.conf uses C locale
+  become: yes
+  lineinfile:
+    path: /etc/postgresql/postgresql.conf
+    line: "{{ item }}"
+    state: present
+  with_items:
+    - "lc_messages = 'C'"
+    - "lc_monetary = 'C'"
+    - "lc_numeric = 'C'"
+    - "lc_time = 'C'"
+  when: stage2_nix
+
+############ Wednesday 26th Capital a 
+
+- name: Create systemd service file for PostgreSQL
+  become: yes
+  template:
+    src: /tmp/ansible-playbook/ansible/files/postgresql_config/postgresql.service.j2
+    dest: /etc/systemd/system/postgresql.service
+    owner: root
+    group: root
+    mode: '0644'
+  when: stage2_nix
+
+- name: Reload systemd daemon
+  become: yes
+  systemd:
+    daemon_reload: yes
+  when: stage2_nix
 
 - name: copy PG systemd unit
   template:
@@ -544,10 +627,15 @@
   become_user: postgres
   ansible.builtin.shell: |
     # Export environment variables inline
-    export LANG=en_US.UTF-8
-    export LANGUAGE=en_US:en
-    export LC_ALL=en_US.UTF-8
-    export LC_CTYPE=en_US.UTF-8
+    # export LANG=en_US.UTF-8
+    # export LANGUAGE=en_US:en
+    # export LC_ALL=en_US.UTF-8
+    # export LC_CTYPE=en_US.UTF-8
+    export LOCALE_ARCHIVE=/usr/lib/locale/locale-archive
+    export LANG=C
+    export LANGUAGE=C
+    export LC_ALL=C
+    export LC_CTYPE=C
     export LOCALE_ARCHIVE=/usr/lib/locale/locale-archive
     # Use the POSIX “.” operator instead of “source”
     . /var/lib/postgresql/.bashrc
