@@ -3,8 +3,6 @@
 
 stdenv.mkDerivation rec {
   pname = "age";
-  # Apache AGE 1.5.0 is compatible with PostgreSQL 15.
-  # Source: https://age.apache.org/download/
   version = "1.5.0";
 
   src = fetchurl {
@@ -12,21 +10,24 @@ stdenv.mkDerivation rec {
     hash = "sha256-7iuLsE/XKgcLo48vzUpZBJcs67oJwoCL817RPAua8nA=";
   };
 
-  nativeBuildInputs = [ bison flex ]; # Build tools for AGE
-  buildInputs = [
-    postgresql # Provides pg_config
-    openssl
-  ];
+  nativeBuildInputs = [ bison flex ];
+  buildInputs = [ postgresql openssl ];
 
-  # AGE uses PGXS. Setting PG_CONFIG should be enough for 'make'.
   makeFlags = [
     "PG_CONFIG=${postgresql}/bin/pg_config"
-    # Add "PG_CPPFLAGS=-Wno-error" if the AGE build is too strict with warnings
-    # and fails on your compiler version.
+    # Relax warnings to avoid potential macOS-specific issues
+    "PG_CPPFLAGS=-Wno-error -Wno-deprecated-non-prototype -Wno-cast-function-type-strict"
   ];
 
-  # PGXS 'make install' with DESTDIR places files in system-like paths
-  # prefixed by DESTDIR. We need to move them to the flat $out structure Nix expects.
+  preBuild = ''
+    # Verify flex is available
+    if ! command -v flex >/dev/null 2>&1; then
+      echo "ERROR: flex is not found in the build environment"
+      exit 1
+    fi
+    echo "Flex version: $(flex --version)"
+  '';
+
   installPhase = ''
     runHook preInstall
 
@@ -50,7 +51,6 @@ stdenv.mkDerivation rec {
         fi
     fi
     if [ "$found_so" = "false" ]; then
-        # Fallback: search more broadly if not found in specific pkglibdir
         echo "AGE .so not found in specific pkglibdir, searching more broadly in $out"
         find "$out" -name "age*.so" -print -exec mv {} $out/lib/ \;
     fi
@@ -70,7 +70,7 @@ stdenv.mkDerivation rec {
         find "$out" -path "*/extension/age--*.sql" -print -exec mv {} $out/share/postgresql/extension/ \;
     fi
 
-    # Clean up potentially empty directory structures left by DESTDIR install
+    # Clean up potentially empty directory structures
     if [ -d "$out/usr" ]; then find "$out/usr" -depth -type d -empty -delete; fi
     if [ -d "$out/nix" ]; then find "$out/nix" -depth -type d -empty -delete; fi
 
@@ -86,8 +86,8 @@ stdenv.mkDerivation rec {
   meta = with lib; {
     description = "Apache AGE graph database extension for PostgreSQL";
     homepage = "https://age.apache.org/";
-    license = licenses.asl20; # Apache License 2.0
+    license = licenses.asl20;
     platforms = postgresql.meta.platforms;
-    maintainers = [ maintainers.advaluepartners ]; # Update with your actual GitHub handle if different
+    maintainers = [ maintainers.barneycook ];
   };
 }
