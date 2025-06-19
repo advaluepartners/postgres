@@ -9,7 +9,7 @@ stdenv.mkDerivation rec {
 
   src = fetchurl {
     url = "https://dlcdn.apache.org/age/PG15/1.5.0/apache-age-1.5.0-src.tar.gz";
-    hash = "sha256-webZWgWZGnSoXwTpk816tjbtHV1UIlXkogpBDAEL4gM=";
+    hash = "sha256-7iuLsE/XKgcLo48vzUpZBJcs67oJwoCL817RPAua8nA=";
   };
 
   nativeBuildInputs = [ bison flex ]; # Build tools for AGE
