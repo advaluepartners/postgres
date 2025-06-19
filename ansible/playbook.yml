@@ -168,11 +168,13 @@
         - install-supabase-internal
       when: debpkg_mode or nixpkg_mode or stage2_nix
 
+######### added stage2 
     - name: Install Supabase specific content
       import_tasks: tasks/setup-supabase-internal.yml
       tags:
         - install-supabase-internal
-      when: debpkg_mode or nixpkg_mode
+      when: debpkg_mode or nixpkg_mode  or stage2_nix
+
 
     - name: Fix IPv6 NDisc issues
       import_tasks: tasks/fix_ipv6_ndisc.yml
@@ -365,6 +367,25 @@
       args:
         executable: /bin/bash
       when: stage2_nix
+
+    - name: Setup Apache AGE extension
+      become: yes
+      become_user: postgres
+      shell: |
+        psql -d postgres -c "CREATE EXTENSION IF NOT EXISTS age;"
+        psql -d postgres -c "LOAD 'age';"
+        # Consider if search_path needs to be set more permanently, e.g.,
+        # psql -d postgres -c "ALTER DATABASE postgres SET search_path = ag_catalog, \"$user\", public, extensions;"
+        # Or for specific roles:
+        # psql -d postgres -c "ALTER ROLE your_graph_user SET search_path = ag_catalog, \"$user\", public, extensions;"
+        # For now, this session-level set is fine for initial setup.
+        psql -d postgres -c "SET search_path = ag_catalog, \"$user\", public;"
+      when: stage2_nix
+      register: age_setup
+      changed_when: "'CREATE EXTENSION' in age_setup.stdout" 
+    
+    # Be careful, if already created, this won't show.
+    # Maybe check for 'LOAD' or 'SET' in stdout too, or ignore changed_when for this.
 
     - name: Setup and add extensions
       import_tasks: tasks/setup-extensions.yml

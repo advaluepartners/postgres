@@ -59,12 +59,6 @@
   become: yes
   when: stage2_nix
 
-## Chnaged Wednesday 26
-# - name: configure locales
-#   command: echo "C.UTF-8 UTF-8" > /etc/locale.gen && echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen
-#   become: yes
-#   when: stage2_nix
-
 - name: configure locales
   copy:
     dest: /etc/locale.gen
@@ -106,17 +100,6 @@
     mode: '0755'
   when: stage2_nix
 
-# - name: Ensure PostgreSQL include directories exist
-#   file:
-#     path: "{{ item }}"
-#     state: directory
-#     owner: postgres
-#     group: postgres
-#     mode: '0755'
-#   with_items:
-#     - /usr/lib/postgresql/include
-#     - /usr/lib/postgresql/include/server
-#   when: stage2_nix
 
 - name: Create symlinks for PostgreSQL headers
   shell: |

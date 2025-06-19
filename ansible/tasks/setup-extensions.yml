@@ -4,8 +4,8 @@
 # - name: Install pg_jsonschema
 #   import_tasks: tasks/postgres-extensions/22-pg_jsonschema.yml
 
-- name: Install postgis
-  import_tasks: tasks/postgres-extensions/01-postgis.yml
+# - name: Install postgis
+#   import_tasks: tasks/postgres-extensions/01-postgis.yml
 
 # - name: Install pgrouting
 #   import_tasks: tasks/postgres-extensions/02-pgrouting.yml
@@ -16,11 +16,11 @@
 # - name: Install pg_cron
 #   import_tasks: tasks/postgres-extensions/04-pg_cron.yml
 
-- name: Install pgaudit
-  import_tasks: tasks/postgres-extensions/05-pgaudit.yml
+# - name: Install pgaudit
+#   import_tasks: tasks/postgres-extensions/05-pgaudit.yml
 
-- name: Install pgjwt
-  import_tasks: tasks/postgres-extensions/06-pgjwt.yml
+# - name: Install pgjwt
+#   import_tasks: tasks/postgres-extensions/06-pgjwt.yml
 
 # - name: Install pgsql-http
 #   import_tasks: tasks/postgres-extensions/07-pgsql-http.yml

@@ -137,6 +137,7 @@
           ./nix/ext/wrappers/default.nix
           ./nix/ext/supautils.nix
           ./nix/ext/plv8.nix
+          ./nix/ext/age.nix
         ];
 
         #Where we import and build the orioledb extension, we add on our custom extensions

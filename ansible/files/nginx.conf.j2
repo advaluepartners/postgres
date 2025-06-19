@@ -15,12 +15,15 @@ http {
         listen       80;
         server_name  cap.company;
 
-        location /pg {
-            proxy_pass http://localhost:8080;
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+        location /pg/ {
+           rewrite ^/pg(/.*)$ $1 break;
+           proxy_pass http://localhost:8080;
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
+           proxy_cache_bypass $http_upgrade; 
+           proxy_no_cache $http_upgrade;
         }
 
         location /storage {
@@ -32,11 +35,14 @@ http {
         }
 
         location /rest/v1 {
+            rewrite ^/rest/v1(/.*)$ $1 break;
             proxy_pass http://localhost:3001;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_cache_bypass $http_upgrade; 
+            proxy_no_cache $http_upgrade;
         }
 
         location /auth {
@@ -66,12 +72,15 @@ http {
         ssl_protocols       TLSv1.2 TLSv1.3;
         ssl_ciphers         HIGH:!aNULL:!MD5;
 
-        location /pg {
-            proxy_pass http://localhost:8080;
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+        location /pg/ {
+           rewrite ^/pg(/.*)$ $1 break;
+           proxy_pass http://localhost:8080;
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
+           proxy_cache_bypass $http_upgrade; 
+           proxy_no_cache $http_upgrade;
         }
 
         location /storage {
@@ -83,11 +92,14 @@ http {
         }
 
         location /rest/v1 {
+            rewrite ^/rest/v1(/.*)$ $1 break;
             proxy_pass http://localhost:3001;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_cache_bypass $http_upgrade; 
+            proxy_no_cache $http_upgrade;
         }
 
         location /auth {

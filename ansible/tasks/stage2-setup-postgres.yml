@@ -79,15 +79,27 @@
     var: groonga_debug.stdout_lines
   when: stage2_nix
 
+# - name: Install Postgres from local flake
+#   become: yes
+#   shell: |
+#     sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile install /tmp/ansible-playbook#postgresql_15"
+#   when: stage2_nix
+#   register: install_postgres
+#   retries: 3
+#   delay: 5
+#   until: install_postgres.rc == 0
+
 - name: Install Postgres from local flake
   become: yes
   shell: |
-    sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile install /tmp/ansible-playbook#postgresql_15"
+    chown -R postgres:postgres /var/lib/postgresql
+    sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile install --accept-flake-config /tmp/ansible-playbook#{{ psql_version }}"
   when: stage2_nix
   register: install_postgres
   retries: 3
   delay: 5
   until: install_postgres.rc == 0
+
 
 - name: Debug Nix profile contents
   become: yes
