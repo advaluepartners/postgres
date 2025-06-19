@@ -15,8 +15,8 @@ stdenv.mkDerivation rec {
 
   makeFlags = [
     "PG_CONFIG=${postgresql}/bin/pg_config"
-    # Relax warnings to avoid potential macOS-specific issues
-    "PG_CPPFLAGS=-Wno-error -Wno-deprecated-non-prototype -Wno-cast-function-type-strict"
+    # Include AGE's src/include/catalog for ag_catalog.h
+    "PG_CPPFLAGS=-I${src}/src/include -I${src}/src/include/catalog -Wno-error -Wno-deprecated-non-prototype -Wno-cast-function-type-strict"
   ];
 
   preBuild = ''
@@ -26,6 +26,13 @@ stdenv.mkDerivation rec {
       exit 1
     fi
     echo "Flex version: $(flex --version)"
+    # Verify ag_catalog.h exists
+    if [ -f "${src}/src/include/catalog/ag_catalog.h" ]; then
+      echo "Found ag_catalog.h in ${src}/src/include/catalog"
+    else
+      echo "ERROR: ag_catalog.h not found in ${src}/src/include/catalog"
+      exit 1
+    fi
   '';
 
   installPhase = ''
