@@ -33,10 +33,11 @@ stdenv.mkDerivation rec {
   buildInputs = [ postgresql openssl ];
 
   makeFlags = [
+    "USE_PGXS=1"
     "PG_CONFIG=${postgresql}/bin/pg_config"
-    # Corrected PG_CPPFLAGS from previous attempt, assuming ${src} points to unpacked root
-    "PG_CPPFLAGS=-I${src}/include -I${src}/include/catalog -I${src}/src/include -I${src}/src/include/catalog -Wno-error -Wno-deprecated-non-prototype -Wno-cast-function-type-strict"
   ];
+
+  env.NIX_CFLAGS_COMPILE = "-Wno-error";
 
   preBuild = ''
     # This phase will not run if src is the dummy derivation
