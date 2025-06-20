@@ -13,8 +13,20 @@ stdenv.mkDerivation rec {
     hash = "sha256-1cyvVEC9MQGMr7Tg6EUbsVBrMc8ahdFS3+CmDkmAq4Y=";
   };
 
+  # Add proper make flags for PostgreSQL extensions
+  makeFlags = [ "USE_PGXS=1" ];
+
+  # Ensure the build actually runs make
+  buildPhase = ''
+    runHook preBuild
+    make $makeFlags
+    runHook postBuild
+  '';
+
   installPhase = ''
+    runHook preInstall
     install -D safeupdate${postgresql.dlSuffix} -t $out/lib
+    runHook postInstall
   '';
 
   meta = with lib; {
