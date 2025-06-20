@@ -146,8 +146,9 @@
         orioleFilteredExtensions = builtins.filter (
           x: 
             x != ./nix/ext/timescaledb.nix &&
-            x != ./nix/ext/timescaledb-2.9.1.nix &&
-            x != ./nix/ext/plv8.nix
+            x != ./nix/ext/timescaledb-2.9.1.nix && // TimescaleDB known issue with OrioleDB
+            x != ./nix/ext/plv8.nix &&              // PLV8 known issue with OrioleDB
+            x != ./nix/ext/age.nix                 // AGE 1.5.0 (PG15/16 src) likely incompatible with PG17 (OrioleDB)
         ) ourExtensions;
 
         orioledbExtensions = orioleFilteredExtensions ++ [ ./nix/ext/orioledb.nix ];
