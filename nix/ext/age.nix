@@ -7,17 +7,16 @@ let
   ageSrcInfo =
     if pgMajorStr == "15" then {
       url = "https://dlcdn.apache.org/age/PG15/${ageVersion}/apache-age-${ageVersion}-src.tar.gz";
-      hash = "sha256-7iuLsE/XKgcLo48vzUpZBJcs67oJwoCL817RPAua8nA="; # Hash for PG15 AGE 1.5.0 src
+      hash = "sha256-7iuLsE/XKgcLo48vzUpZBJcs67oJwoCL817RPAua8nA="; 
       isSupported = true;
-    } else if pgMajorStr == "16" then { # If you add a PG16 target later
+    } else if pgMajorStr == "16" then {
       url = "https://dlcdn.apache.org/age/PG16/${ageVersion}/apache-age-${ageVersion}-src.tar.gz";
-      # IMPORTANT: You would need to prefetch this hash for the PG16 source tarball
-      hash = "sha256-PLEASE_PREFETCH_AND_FILL_FOR_PG16_AGE_1.5.0_SRC";
-      isSupported = true; # Assuming AGE 1.5.0 for PG16 exists and you want to support it
-    } else { # Covers PG17 (from orioledb-17) and any other unsupported versions
+      hash = "sha256-031wczk98cyqr1536h49f3mdjq4pmbbmbidp00s3sqmjc6z7yy5i"; # Use the hash you got
+      isSupported = true;
+    } else { # This covers PG17 and any other unsupported versions
       isSupported = false;
-      url = ""; # Dummy URL to prevent fetchurl error during evaluation for unsupported versions
-      hash = ""; # Dummy hash
+      url = ""; 
+      hash = ""; 
     };
 in
 stdenv.mkDerivation rec {
