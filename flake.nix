@@ -140,7 +140,7 @@
           ./nix/ext/wal2json.nix
           ./nix/ext/pgmq.nix
           ./nix/ext/pg_repack.nix
-          ./nix/ext/pg-safeupdate.nix
+          # ./nix/ext/pg-safeupdate.nix
           ./nix/ext/plpgsql-check.nix
           ./nix/ext/pgjwt.nix
           ./nix/ext/pgaudit.nix
