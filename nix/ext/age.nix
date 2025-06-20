@@ -48,7 +48,28 @@ stdenv.mkDerivation rec {
 
   installPhase = if ageSrcInfo.isSupported then ''
     runHook preInstall
-    make install USE_PGXS=1 PG_CONFIG=${postgresql}/bin/pg_config
+    
+    # Install to our output directory, not PostgreSQL's read-only store path
+    mkdir -p $out/lib $out/share/postgresql/extension
+    
+    # Copy the shared library
+    cp age.so $out/lib/
+    
+    # Copy SQL and control files from the source
+    cp sql/age*.sql $out/share/postgresql/extension/ || true
+    cp age.control $out/share/postgresql/extension/ || true
+    
+    # Ensure we have the basic files (fallback if above fails)
+    if [ ! -f $out/share/postgresql/extension/age.control ]; then
+      echo "Warning: age.control not found in expected location"
+      find . -name "*.control" -exec cp {} $out/share/postgresql/extension/ \;
+    fi
+    
+    if [ ! -f $out/share/postgresql/extension/age--1.5.0.sql ]; then
+      echo "Warning: SQL files not found in sql/ directory"  
+      find . -name "*.sql" -exec cp {} $out/share/postgresql/extension/ \;
+    fi
+    
     runHook postInstall
   '' else ''
     echo "Skipping install for unsupported AGE/PG combination."
