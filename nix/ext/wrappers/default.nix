@@ -4,7 +4,7 @@
 , openssl
 , pkg-config
 , postgresql
-, buildPgrxExtension_0_12_6
+, buildPgrxExtension_0_12_9
 , cargo
 , darwin
 , jq
@@ -12,21 +12,21 @@
 , git
 }:
 let
-  rustVersion = "1.80.0";
+  rustVersion = "1.84.0";
   cargo = rust-bin.stable.${rustVersion}.default;
 in
-buildPgrxExtension_0_12_6 rec {
+buildPgrxExtension_0_12_9 rec {
   pname = "supabase-wrappers";
-  version = "0.4.4";
+  version = "0.5.0";
   # update the following array when the wrappers version is updated
   # required to ensure that extensions update scripts from previous versions are generated
-  previousVersions = ["0.4.3" "0.4.2" "0.4.1" "0.4.0" "0.3.1" "0.3.0" "0.2.0" "0.1.19" "0.1.18" "0.1.17" "0.1.16" "0.1.15" "0.1.14" "0.1.12" "0.1.11" "0.1.10" "0.1.9" "0.1.8" "0.1.7" "0.1.6" "0.1.5" "0.1.4" "0.1.1" "0.1.0"];
+  previousVersions = ["0.4.6" "0.4.5" "0.4.4" "0.4.3" "0.4.2" "0.4.1" "0.4.0" "0.3.1" "0.3.0" "0.2.0" "0.1.19" "0.1.18" "0.1.17" "0.1.16" "0.1.15" "0.1.14" "0.1.12" "0.1.11" "0.1.10" "0.1.9" "0.1.8" "0.1.7" "0.1.6" "0.1.5" "0.1.4" "0.1.1" "0.1.0"];
   inherit postgresql;
   src = fetchFromGitHub {
     owner = "supabase";
     repo = "wrappers";
     rev = "v${version}";
-    hash = "sha256-QoGFJpq8PuvMM8SS+VZd7MlNl56uFivRjs1tCtwX+oE=";
+    hash = "sha256-FbRTUcpEHBa5DI6dutvBeahYM0RZVAXIzIAZWIaxvn0";
   };
  
   nativeBuildInputs = [ pkg-config cargo git ];
@@ -38,11 +38,21 @@ buildPgrxExtension_0_12_6 rec {
 
   NIX_LDFLAGS = "-L${postgresql}/lib -lpq";
 
-  # Set necessary environment variables for pgrx
+  # Set necessary environment variables for pgrx in darwin only
   env = lib.optionalAttrs stdenv.isDarwin {
     POSTGRES_LIB = "${postgresql}/lib";
     RUSTFLAGS = "-C link-arg=-undefined -C link-arg=dynamic_lookup";
-    PGPORT = "5435";
+    # Calculate unique port for each PostgreSQL version:
+    # - Check if version contains underscore (indicating OrioleDB)
+    # - Add 1 to port if it's OrioleDB
+    # - Add 2 for each major version above 15
+    # Examples:
+    # - PostgreSQL 15.8 → 5435 + 0 + (15-15)*2 = 5435
+    # - PostgreSQL 17_0 (OrioleDB) → 5435 + 1 + (17-15)*2 = 5440
+    # - PostgreSQL 17.4 → 5435 + 0 + (17-15)*2 = 5439
+    PGPORT = toString (5534 + 
+      (if builtins.match ".*_.*" postgresql.version != null then 1 else 0) +  # +1 for OrioleDB
+      ((builtins.fromJSON (builtins.substring 0 2 postgresql.version)) - 15) * 2);  # +2 for each major version
   };
 
   OPENSSL_NO_VENDOR = 1;
@@ -133,7 +143,7 @@ buildPgrxExtension_0_12_6 rec {
    fi
    mv $out/lib/wrappers-${version}${postgresql.dlSuffix} $out/lib/wrappers${postgresql.dlSuffix}
    ln -s $out/lib/wrappers${postgresql.dlSuffix} $out/lib/wrappers-${version}${postgresql.dlSuffix}
- 
+
   echo "Creating wrappers.so symlinks to support pg_upgrade..."
   if [ -f "$out/lib/wrappers.so" ]; then
     while read -r previous_version; do
@@ -157,7 +167,6 @@ buildPgrxExtension_0_12_6 rec {
   meta = with lib; {
     description = "Various Foreign Data Wrappers (FDWs) for PostreSQL";
     homepage = "https://github.com/supabase/wrappers";
-    maintainers = with maintainers; [ samrose ];
     platforms = postgresql.meta.platforms;
     license = licenses.postgresql;
   };

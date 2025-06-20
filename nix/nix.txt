@@ -6,7 +6,7 @@ File content begins immediately after its path and extends until the next '''---
 
 
 *Directory: nix*
-Total words: 21463
+Total words: 22196
 
 File structure:
 
@@ -45,7 +45,10 @@ tools/
     run-replica.sh.in
     run-restore.sh.in
     run-server.sh.in
+    supabase-groonga.nix
     sync-exts-versions.sh.in
+    update_readme.nu
+    wal-g.nix
 docker/
     init.sh.in
 overlays/
@@ -2161,6 +2164,221 @@ sake of robustness, you should use `nix run` on this repository to do so.
 
 '''
 
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/nix/tools/update_readme.nu ---
+#!/usr/bin/env nu
+
+# Load required data
+def load_flake [] {
+    nix flake show --json --all-systems | from json
+}
+
+def find_index [list: list<any>, value: any] {
+    let enumerated = ($list | enumerate)
+    let found = ($enumerated | where item == $value | first)
+    if ($found | is-empty) {
+        -1
+    } else {
+        $found.index
+    }
+}
+
+def get_systems [flake_json] {
+    $flake_json | get packages | columns
+}
+
+def get_postgres_versions [flake_json] {
+    let packages = ($flake_json | get packages | get aarch64-linux)
+    
+    # Get available versions from postgresql packages
+    let available_versions = ($packages 
+        | columns 
+        | where {|col| 
+            # Match exact postgresql_<number> or postgresql_orioledb-<number>
+            $col =~ "^postgresql_\\d+$" or $col =~ "^postgresql_orioledb-\\d+$"
+        }
+        | each {|pkg_name|
+            let is_orioledb = ($pkg_name =~ "orioledb")
+            let pkg_info = ($packages | get $pkg_name)
+            let version = if $is_orioledb {
+                $pkg_info.name | str replace "postgresql-" "" | split row "_" | first  # Get "17" from "postgresql-17_5"
+            } else {
+                $pkg_info.name | str replace "postgresql-" "" | split row "." | first  # Get "15" from "postgresql-15.8"
+            }
+            {
+                version: $version,
+                is_orioledb: $is_orioledb,
+                name: $pkg_info.name
+            }
+        }
+    )
+
+    $available_versions | uniq | sort-by version
+}
+
+def get_src_url [pkg_attr] {
+    let result = (do { nix eval $".#($pkg_attr).src.url" } | complete)
+    if $result.exit_code == 0 {
+        $result.stdout | str trim | str replace -a '"' ''  # Remove all quotes
+    } else {
+        null
+    }
+}
+
+def get_extension_info [flake_json, pg_info] {
+    let major_version = ($pg_info.version | split row "." | first)
+    let version_prefix = if $pg_info.is_orioledb {
+        "psql_orioledb-" + $major_version + "/exts/"
+    } else {
+        "psql_" + $major_version + "/exts/"
+    }
+    
+    print $"Looking for extensions with prefix: ($version_prefix)"
+    
+    let sys_packages = ($flake_json | get packages | get aarch64-linux)
+    let ext_names = ($sys_packages 
+        | columns 
+        | where {|col| $col =~ $"^($version_prefix)"}
+    )
+    print $"Found extensions: ($ext_names | str join ', ')"
+    
+    let all_exts = ($ext_names | each {|ext_name| 
+        let ext_info = ($sys_packages | get $ext_name)
+        let name = ($ext_name | str replace $version_prefix "")
+        let version = if $name == "orioledb" {
+            $ext_info.name  # Use name directly for orioledb
+        } else if ($ext_info.name | str contains "-") {
+            $ext_info.name | split row "-" | last
+        } else {
+            $ext_info.name
+        }
+        let src_url = (get_src_url $ext_name)
+        {
+            name: $name,
+            version: $version,
+            description: $ext_info.description,
+            url: $src_url
+        }
+    })
+    
+    $all_exts | sort-by name
+}
+
+def create_version_link [pg_info] {
+    if $pg_info.is_orioledb {
+        let display = $"orioledb-($pg_info.name)"
+        let url = "https://github.com/orioledb/orioledb"
+        $"- ✅ Postgres [($display)]\(($url)\)"
+    } else {
+        let major_version = ($pg_info.version | split row "." | first)
+        let url = $"https://www.postgresql.org/docs/($major_version)/index.html"
+        $"- ✅ Postgres [($pg_info.name)]\(($url)\)"  # Use full version number
+    }
+}
+
+def create_ext_table [extensions, pg_info] {
+    let header_version = if $pg_info.is_orioledb {
+        $"orioledb-($pg_info.version)"  # Add orioledb prefix for orioledb versions
+    } else {
+        $pg_info.version
+    }
+    
+    let header = [
+        "",  # blank line for spacing
+        $"### PostgreSQL ($header_version) Extensions",
+        "| Extension | Version | Description |",
+        "| ------------- | :-------------: | ------------- |"
+    ]
+    
+    let rows = ($extensions | each {|ext|
+        let name = $ext.name
+        let version = $ext.version
+        let desc = $ext.description
+        let url = $ext.url  # Get URL from extension info
+        
+        $"| [($name)]\(($url)\) | [($version)]\(($url)\) | ($desc) |"
+    })
+    
+    $header | append $rows
+}
+
+def update_readme [] {
+    let flake_json = (load_flake)
+    let readme_path = ([$env.PWD "README.md"] | path join)
+    let readme = (open $readme_path | lines)
+    let pg_versions = (get_postgres_versions $flake_json)
+    
+    # Find section indices
+    let features_start = ($readme | where $it =~ "^## Primary Features" | first)
+    let features_end = ($readme | where $it =~ "^## Extensions" | first)
+    let features_start_idx = (find_index $readme $features_start)
+    let features_end_idx = (find_index $readme $features_end)
+    
+    if $features_start_idx == -1 or $features_end_idx == -1 {
+        error make {msg: "Could not find Features sections"}
+    }
+    
+    # Update Primary Features section
+    let features_content = [
+        ($pg_versions | each {|version| create_version_link $version} | str join "\n")
+        "- ✅ Ubuntu 20.04 (Focal Fossa)."
+        "- ✅ [wal_level](https://www.postgresql.org/docs/current/runtime-config-wal.html) = logical and [max_replication_slots](https://www.postgresql.org/docs/current/runtime-config-replication.html) = 5. Ready for replication."
+        "- ✅ [Large Systems Extensions](https://github.com/aws/aws-graviton-getting-started#building-for-graviton-and-graviton2). Enabled for ARM images."
+    ]
+
+    # Find extension section indices
+    let ext_start = ($readme | where $it =~ "^## Extensions" | first)
+    let ext_start_idx = (find_index $readme $ext_start)
+    
+    # Find next section after Extensions or use end of file
+    let next_section_idx = ($readme 
+        | enumerate 
+        | where {|it| $it.index > $ext_start_idx and ($it.item =~ "^## ")} 
+        | first
+        | get index
+        | default ($readme | length)
+    )
+    
+    if $ext_start_idx == -1 {
+        error make {msg: "Could not find Extensions section"}
+    }
+
+    # Create extension sections content
+    let ext_sections_content = ($pg_versions | each {|version|
+        let extensions = (get_extension_info $flake_json $version)
+        create_ext_table $extensions $version
+    } | flatten)
+
+    # Combine sections, removing duplicate headers
+    let before_features = ($readme 
+        | range (0)..($features_start_idx)
+        | where {|line| not ($line =~ "^## Primary Features")}
+    )
+    let features_header = ($readme | get $features_start_idx)
+    let between_sections = ($readme 
+        | range ($features_end_idx)..($ext_start_idx)
+        | where {|line| 
+            not ($line =~ "^## Primary Features" or $line =~ "^## Extensions")
+        }
+    )
+    let ext_header = ($readme | get $ext_start_idx)
+    let after_ext = ($readme | range ($next_section_idx)..($readme | length))
+
+    let output = ($before_features 
+        | append $features_header
+        | append $features_content
+        | append $between_sections
+        | append $ext_header
+        | append $ext_sections_content
+        | append $after_ext
+        | str join "\n")
+    
+    $output | save --force $readme_path
+}
+
+# Main execution
+update_readme
+'''
+
 '''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/nix/tools/dbmate-tool.sh.in ---
 #!/usr/bin/env bash
 # shellcheck shell=bash
@@ -2614,6 +2832,83 @@ exec psql -U "$PSQL_USER" -p "$PORTNO" -h localhost postgres
 
 '''
 
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/nix/tools/supabase-groonga.nix ---
+{ lib, stdenv, cmake, fetchurl, kytea, msgpack-c, mecab, pkg-config, rapidjson
+, testers, xxHash, zstd, postgresqlPackages, makeWrapper, suggestSupport ? false
+, zeromq, libevent, openssl, lz4Support ? false, lz4, zlibSupport ? true, zlib
+, writeShellScriptBin, callPackage }:
+let mecab-naist-jdic = callPackage ./ext/mecab-naist-jdic { };
+in stdenv.mkDerivation (finalAttrs: {
+  pname = "supabase-groonga";
+  version = "14.0.5";
+  src = fetchurl {
+    url =
+      "https://packages.groonga.org/source/groonga/groonga-${finalAttrs.version}.tar.gz";
+    hash = "sha256-y4UGnv8kK0z+br8wXpPf57NMXkdEJHcLCuTvYiubnIc=";
+  };
+  patches =
+    [ ./fix-cmake-install-path.patch ./do-not-use-vendored-libraries.patch ];
+  nativeBuildInputs = [ cmake pkg-config makeWrapper ];
+  buildInputs = [ rapidjson xxHash zstd mecab kytea msgpack-c ]
+    ++ lib.optionals lz4Support [ lz4 ] ++ lib.optional zlibSupport [ zlib ]
+    ++ lib.optionals suggestSupport [ zeromq libevent ];
+  cmakeFlags = [
+    "-DWITH_MECAB=ON"
+    "-DMECAB_DICDIR=${mecab-naist-jdic}/lib/mecab/dic/naist-jdic"
+    "-DMECAB_CONFIG=${mecab}/bin/mecab-config"
+    "-DENABLE_MECAB_TOKENIZER=ON"
+    "-DMECAB_INCLUDE_DIR=${mecab}/include"
+    "-DMECAB_LIBRARY=${mecab}/lib/libmecab.so"
+    "-DGROONGA_ENABLE_TOKENIZER_MECAB=YES"
+    "-DGRN_WITH_MECAB=YES"
+  ];
+  preConfigure = ''
+    export MECAB_DICDIR=${mecab-naist-jdic}/lib/mecab/dic/naist-jdic
+    echo "MeCab dictionary directory is: $MECAB_DICDIR"
+  '';
+  buildPhase = ''
+    cmake --build . -- VERBOSE=1
+    grep -i mecab CMakeCache.txt || (echo "MeCab not detected in CMake cache" && exit 1)
+    echo "CMake cache contents related to MeCab:"
+    grep -i mecab CMakeCache.txt
+  '';
+
+  # installPhase = ''
+  #   mkdir -p $out/bin $out/lib/groonga/plugins
+  #   cp -r lib/groonga/plugins/* $out/lib/groonga/plugins
+  #   cp -r bin/* $out/bin
+  #   echo "Installed Groonga plugins:"
+  #   ls -l $out/lib/groonga/plugins
+  # '';
+
+  postInstall = ''
+    echo "Searching for MeCab-related files:"
+    find $out -name "*mecab*"
+
+    echo "Checking Groonga plugins directory:"
+    ls -l $out/lib/groonga/plugins
+
+    echo "Wrapping Groonga binary:"
+    wrapProgram $out/bin/groonga \
+      --set GRN_PLUGINS_DIR $out/lib/groonga/plugins 
+
+  '';
+  env.NIX_CFLAGS_COMPILE =
+    lib.optionalString zlibSupport "-I${zlib.dev}/include";
+
+  meta = with lib; {
+    homepage = "https://groonga.org/";
+    description = "Open-source fulltext search engine and column store";
+    license = licenses.lgpl21;
+    platforms = platforms.all;
+    longDescription = ''
+      Groonga is an open-source fulltext search engine and column store.
+      It lets you write high-performance applications that requires fulltext search.
+    '';
+  };
+})
+'''
+
 '''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/nix/tools/run-restore.sh.in ---
 #!/usr/bin/env bash
 # shellcheck shell=bash
@@ -2738,6 +3033,91 @@ else
 fi
 '''
 
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/nix/tools/wal-g.nix ---
+{ lib
+, buildGoModule
+, fetchFromGitHub
+, brotli
+, libsodium
+, installShellFiles
+,
+}:
+
+let
+  walGCommon = { version, vendorHash, sha256, majorVersion }:
+    buildGoModule rec {
+      pname = "wal-g-${majorVersion}";
+      inherit version;
+
+      src = fetchFromGitHub {
+        owner = "wal-g";
+        repo = "wal-g";
+        rev = "v${version}";
+        inherit sha256;
+      };
+
+      inherit vendorHash;
+
+      nativeBuildInputs = [ installShellFiles ];
+
+      buildInputs = [
+        brotli
+        libsodium
+      ];
+
+      subPackages = [ "main/pg" ];
+
+      tags = [
+        "brotli"
+        "libsodium"
+      ];
+
+      ldflags = [
+        "-s"
+        "-w"
+        "-X github.com/wal-g/wal-g/cmd/pg.walgVersion=${version}"
+        "-X github.com/wal-g/wal-g/cmd/pg.gitRevision=${src.rev}"
+      ];
+
+      postInstall = ''
+        mv $out/bin/pg $out/bin/wal-g-${majorVersion}
+        
+        # Create version-specific completions
+        mkdir -p $out/share/bash-completion/completions
+        $out/bin/wal-g-${majorVersion} completion bash > $out/share/bash-completion/completions/wal-g-${majorVersion}
+        
+        mkdir -p $out/share/zsh/site-functions
+        $out/bin/wal-g-${majorVersion} completion zsh > $out/share/zsh/site-functions/_wal-g-${majorVersion}
+        
+      '';
+
+      meta = with lib; {
+        homepage = "https://github.com/wal-g/wal-g";
+        license = licenses.asl20;
+        description = "Archival restoration tool for PostgreSQL";
+        mainProgram = "wal-g-${majorVersion}";
+      };
+    };
+in
+{
+  # wal-g v2.0.1
+  wal-g-2 = walGCommon {
+    version = "2.0.1";
+    sha256 = "sha256-5mwA55aAHwEFabGZ6c3pi8NLcYofvoe4bb/cFj7NWok=";
+    vendorHash = "sha256-BbQuY6r30AkxlCZjY8JizaOrqEBdv7rIQet9KQwYB/g=";
+    majorVersion = "2";
+  };
+
+  # wal-g v3.0.5
+  wal-g-3 = walGCommon {
+    version = "3.0.5";
+    sha256 = "sha256-wVr0L2ZXMuEo6tc2ajNzPinVQ8ZVzNOSoaHZ4oFsA+U=";
+    vendorHash = "sha256-YDLAmRfDl9TgbabXj/1rxVQ052NZDg3IagXVTe5i9dw=";
+    majorVersion = "3";
+  };
+}
+'''
+
 '''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/nix/docker/init.sh.in ---
 #!/bin/bash
 # shellcheck shell=bash
@@ -2845,7 +3225,6 @@ stdenv.mkDerivation (finalAttrs: {
     '';
     homepage = "https://github.com/reorg/pg_repack";
     license = licenses.bsd3;
-    maintainers = with maintainers; [ samrose ];
     inherit (postgresql.meta) platforms;
     mainProgram = "pg_repack";
   };
@@ -2873,7 +3252,6 @@ stdenv.mkDerivation {
   meta = with lib; {
     description = "Regression testing tool for PostgreSQL";
     homepage = "https://www.postgresql.org/";
-    maintainers = with maintainers; [ samrose ];
     platforms = postgresql.meta.platforms;
     license = licenses.postgresql;
   };
@@ -2881,32 +3259,32 @@ stdenv.mkDerivation {
 '''
 
 '''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/nix/ext/vault.nix ---
-{ lib, stdenv, fetchFromGitHub, postgresql }:
+{ lib, stdenv, fetchFromGitHub, libsodium, postgresql }:
 
 stdenv.mkDerivation rec {
   pname = "vault";
-  version = "0.2.9";
+  version = "0.3.1";
 
-  buildInputs = [ postgresql ];
+  buildInputs = [ libsodium postgresql ];
 
   src = fetchFromGitHub {
     owner = "supabase";
     repo = pname;
     rev = "refs/tags/v${version}";
-    hash = "sha256-kXTngBW4K6FkZM8HvJG2Jha6OQqbejhnk7tchxy031I=";
+    hash = "sha256-MC87bqgtynnDhmNZAu96jvfCpsGDCPB0g5TZfRQHd30=";
   };
 
   installPhase = ''
     mkdir -p $out/{lib,share/postgresql/extension}
 
-    cp sql/*.sql $out/share/postgresql/extension
-    cp *.control $out/share/postgresql/extension
+    install -D *${postgresql.dlSuffix} $out/lib
+    install -D -t $out/share/postgresql/extension sql/*.sql
+    install -D -t $out/share/postgresql/extension *.control
   '';
 
   meta = with lib; {
     description = "Store encrypted secrets in PostgreSQL";
     homepage = "https://github.com/supabase/${pname}";
-    maintainers = with maintainers; [ samrose ];
     platforms = postgresql.meta.platforms;
     license = licenses.postgresql;
   };
@@ -2943,7 +3321,6 @@ stdenv.mkDerivation rec {
     '';
     license = licenses.mit;
     platforms = postgresql.meta.platforms;
-    maintainers = with maintainers; [samrose];
   };
 }
 
@@ -2977,7 +3354,6 @@ stdenv.mkDerivation rec {
     description = "Run Cron jobs through PostgreSQL";
     homepage    = "https://github.com/citusdata/pg_cron";
     changelog   = "https://github.com/citusdata/pg_cron/raw/v${version}/CHANGELOG.md";
-    maintainers = with maintainers; [ samrose ];
     platforms   = postgresql.meta.platforms;
     license     = licenses.postgresql;
   };
@@ -3105,7 +3481,6 @@ stdenv.mkDerivation rec {
   meta = with lib; {
     description = "Async networking for Postgres";
     homepage = "https://github.com/supabase/pg_net";
-    maintainers = with maintainers; [ samrose ];
     platforms = postgresql.meta.platforms;
     license = licenses.postgresql;
   };
@@ -3222,7 +3597,6 @@ maven.buildMavenPackage rec {
     description = "PL/Java extension for PostgreSQL";
     homepage = https://github.com/tada/pljava;
     license = licenses.bsd3;
-    maintainers = [ maintainers.samrose ];  # Update with actual maintainer info
   };
 }
 
@@ -3272,7 +3646,6 @@ stdenv.mkDerivation rec {
   meta = with lib; {
     description = "Query Performance Monitoring Tool for PostgreSQL";
     homepage = "https://github.com/percona/${pname}";
-    maintainers = with maintainers; [ samrose ];
     platforms = postgresql.meta.platforms;
     license = licenses.postgresql;
     broken = lib.versionOlder postgresql.version "15";
@@ -3399,7 +3772,6 @@ postInstall = ''
     homepage = "https://postgis.net/";
     changelog = "https://git.osgeo.org/gitea/postgis/postgis/raw/tag/${version}/NEWS";
     license = licenses.gpl2;
-    maintainers = with maintainers; [ samrose ];
     inherit (postgresql.meta) platforms;
   };
 }
@@ -3548,7 +3920,6 @@ stdenv.mkDerivation (finalAttrs: {
   meta = with lib; {
     description = "V8 Engine Javascript Procedural Language add-on for PostgreSQL";
     homepage = "https://plv8.github.io/";
-    maintainers = with maintainers; [ samrose ];
     platforms = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" "x86_64-darwin" ];
     license = licenses.postgresql;
   };
@@ -3585,7 +3956,6 @@ stdenv.mkDerivation rec {
     description = "Partition management extension for PostgreSQL";
     homepage    = "https://github.com/pgpartman/pg_partman";
     changelog   = "https://github.com/pgpartman/pg_partman/blob/v${version}/CHANGELOG.md";
-    maintainers = with maintainers; [ samrose ];
     platforms   = postgresql.meta.platforms;
     license     = licenses.postgresql;
     broken      = versionOlder postgresql.version "14";
@@ -3621,7 +3991,6 @@ stdenv.mkDerivation rec {
   meta = with lib; {
     description = "Generate short unique IDs in PostgreSQL";
     homepage = "https://github.com/iCyberon/pg_hashids";
-    maintainers = with maintainers; [ samrose ];
     platforms = postgresql.meta.platforms;
     license = licenses.postgresql;
   };
@@ -3738,7 +4107,6 @@ stdenv.mkDerivation rec {
     changelog = "https://github.com/pgroonga/pgroonga/releases/tag/${version}";
     license = licenses.postgresql;
     platforms = postgresql.meta.platforms;
-    maintainers = with maintainers; [ samrose ];
   };
 }
 '''
@@ -3770,7 +4138,6 @@ stdenv.mkDerivation rec {
     description = "PostgreSQL JSON output plugin for changeset extraction";
     homepage = "https://github.com/eulerto/wal2json";
     changelog = "https://github.com/eulerto/wal2json/releases/tag/wal2json_${version}";
-    maintainers = with maintainers; [ samrose ];
     platforms = postgresql.meta.platforms;
     license = licenses.bsd3;
   };
@@ -3783,7 +4150,7 @@ stdenv.mkDerivation rec {
 
 stdenv.mkDerivation rec {
   pname = "supautils";
-  version = "2.6.0";
+  version = "2.9.4";
 
   buildInputs = [ postgresql ];
 
@@ -3791,7 +4158,7 @@ stdenv.mkDerivation rec {
     owner = "supabase";
     repo = pname;
     rev = "refs/tags/v${version}";
-    hash = "sha256-QNfUpQjqHNzbNqBvjb5a3GtNH9hjbBMDUK19xUU3LpI=";
+    hash = "sha256-qP9fOEWXw+wY49GopTizwxSBEGS0UoseJHVBtKS/BdI=";
   };
 
   installPhase = ''
@@ -3812,179 +4179,105 @@ stdenv.mkDerivation rec {
 '''
 
 '''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/nix/ext/pg_graphql.nix ---
-{ lib, stdenv, fetchFromGitHub, postgresql, buildPgrxExtension_0_12_6, cargo, rust-bin }:
+{ lib, stdenv, fetchFromGitHub, postgresql, buildPgrxExtension_0_12_9, cargo, rust-bin }:
+
 let
-  rustVersion = "1.80.0";
-  cargo = rust-bin.stable.${rustVersion}.default;
+    rustVersion = "1.81.0";
+    cargo = rust-bin.stable.${rustVersion}.default;
 in
-buildPgrxExtension_0_12_6 rec {
+buildPgrxExtension_0_12_9 rec {
   pname = "pg_graphql";
-  version = "1.5.9";
+  version = "1.5.11";
   inherit postgresql;
 
   src = fetchFromGitHub {
     owner = "supabase";
     repo = pname;
     rev = "v${version}";
-    hash = "sha256-YpLN43FtLhp2cb7cyM+4gEx8GTwsRiKTfxaMq0b8hk0=";
+    hash = "sha256-BMZc9ui+2J3U24HzZZVCU5+KWhz+5qeUsRGeptiqbek=";
   };
 
   nativeBuildInputs = [ cargo ];
   buildInputs = [ postgresql ];
   
-  CARGO="${cargo}/bin/cargo";
-  #darwin env needs PGPORT to be unique for build to not clash with other pgrx extensions
+  CARGO = "${cargo}/bin/cargo";
+  
+  cargoLock = {
+    lockFile = "${src}/Cargo.lock";
+  };
+  # Setting RUSTFLAGS in env to ensure it's available for all phases
   env = lib.optionalAttrs stdenv.isDarwin {
     POSTGRES_LIB = "${postgresql}/lib";
+    PGPORT = toString (5430 + 
+      (if builtins.match ".*_.*" postgresql.version != null then 1 else 0) +  # +1 for OrioleDB
+      ((builtins.fromJSON (builtins.substring 0 2 postgresql.version)) - 15) * 2);  # +2 for each major version
     RUSTFLAGS = "-C link-arg=-undefined -C link-arg=dynamic_lookup";
-    PGPORT = "5434";
+    NIX_BUILD_CORES = "4";  # Limit parallel jobs
+    CARGO_BUILD_JOBS = "4"; # Limit cargo parallelism
   };
-  cargoHash = "sha256-d2RSHtJgbYlOvArjOTaeYoca01UyWPUEO5vhktxxB6U=";
+  CARGO_PROFILE_RELEASE_BUILD_OVERRIDE_DEBUG = true;
 
-  # FIXME (aseipp): disable the tests since they try to install .control
-  # files into the wrong spot, aside from that the one main test seems
-  # to work, though
+
   doCheck = false;
 
   meta = with lib; {
     description = "GraphQL support for PostreSQL";
     homepage = "https://github.com/supabase/${pname}";
-    maintainers = with maintainers; [ samrose ];
     platforms = postgresql.meta.platforms;
     license = licenses.postgresql;
   };
 }
-
 '''
 
 '''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/nix/ext/age.nix ---
-{ lib, stdenv, fetchurl, postgresql, openssl, bison, flex, pkgs }: # Added pkgs
+{ lib, stdenv, fetchurl, postgresql, openssl, bison, flex, pkgs }:
 
 let
-  pgMajorStr = lib.versions.major postgresql.version; # e.g., "15" or "17"
-  ageVersion = "1.5.0"; # This is the AGE version, defined here
+  pgMajorStr = lib.versions.major postgresql.version;
+  ageVersion = "1.5.0";
 
   ageSrcInfo =
     if pgMajorStr == "15" then {
       url = "https://dlcdn.apache.org/age/PG15/${ageVersion}/apache-age-${ageVersion}-src.tar.gz";
-      hash = "sha256-7iuLsE/XKgcLo48vzUpZBJcs67oJwoCL817RPAua8nA="; # Hash for PG15 AGE 1.5.0 src
+      hash = "sha256-7iuLsE/XKgcLo48vzUpZBJcs67oJwoCL817RPAua8nA=";
       isSupported = true;
-    } else if pgMajorStr == "16" then { # If you add a PG16 target later
+    } else if pgMajorStr == "16" then {
       url = "https://dlcdn.apache.org/age/PG16/${ageVersion}/apache-age-${ageVersion}-src.tar.gz";
-      # IMPORTANT: You would need to prefetch this hash for the PG16 source tarball
-      hash = "sha256-PLEASE_PREFETCH_AND_FILL_FOR_PG16_AGE_1.5.0_SRC";
-      isSupported = true; # Assuming AGE 1.5.0 for PG16 exists and you want to support it
-    } else { # Covers PG17 (from orioledb-17) and any other unsupported versions
+      hash = "sha256-031wczk98cyqr1536h49f3mdjq4pmbbmbidp00s3sqmjc6z7yy5i";
+      isSupported = true;
+    } else {
       isSupported = false;
-      url = ""; # Dummy URL to prevent fetchurl error during evaluation for unsupported versions
-      hash = ""; # Dummy hash
+      url = "";
+      hash = "";
     };
 in
 stdenv.mkDerivation rec {
   pname = "age";
-  version = ageVersion; # Explicitly set version to ageVersion
+  version = ageVersion;
 
-  # Conditionally fetch source or use a dummy if unsupported
   src = if ageSrcInfo.isSupported then fetchurl {
     url = ageSrcInfo.url;
     sha256 = ageSrcInfo.hash;
-  } else pkgs.runCommand "fake-age-src-${pname}-${version}" {} "mkdir -p $out"; # Dummy src
+  } else pkgs.runCommand "fake-age-src-${pname}-${version}" {} "mkdir -p $out";
 
   nativeBuildInputs = [ bison flex ];
   buildInputs = [ postgresql openssl ];
 
   makeFlags = [
+    "USE_PGXS=1" 
     "PG_CONFIG=${postgresql}/bin/pg_config"
-    # Corrected PG_CPPFLAGS from previous attempt, assuming ${src} points to unpacked root
-    "PG_CPPFLAGS=-I${src}/include -I${src}/include/catalog -I${src}/src/include -I${src}/src/include/catalog -Wno-error -Wno-deprecated-non-prototype -Wno-cast-function-type-strict"
   ];
 
-  preBuild = ''
-    # This phase will not run if src is the dummy derivation
-    if [ ! -f "${src}/include/catalog/ag_catalog.h" ]; then
-      echo "Skipping preBuild checks for dummy source or ag_catalog.h not found where expected."
-      echo "Attempted path: ${src}/include/catalog/ag_catalog.h"
-      # If it's a real source and the file is missing, it's an error.
-      # If it's the dummy source, this 'if' body won't execute meaningfully.
-      if [ -d "${src}/include" ]; then # Check if it's a real source directory
-          echo "ERROR: ag_catalog.h not found in a real source directory!"
-          ls -R ${src} # List contents for debugging
-          exit 1
-      fi
-    else
-      echo "Found ag_catalog.h in ${src}/include/catalog"
-    fi
-    if ! command -v flex >/dev/null 2>&1; then
-      echo "ERROR: flex is not found in the build environment. Path: $PATH"
-      exit 1
-    fi
-    echo "Flex version: $(flex --version)"
-  '';
+  # Remove the problematic preBuild section entirely
+  # The AGE makefile should handle the build process
 
   installPhase = if ageSrcInfo.isSupported then ''
     runHook preInstall
-
-    make install DESTDIR=$out PG_CONFIG=${postgresql}/bin/pg_config
-
-    PKGLIBDIR=$(${postgresql}/bin/pg_config --pkglibdir)
-    SHAREDIR=$(${postgresql}/bin/pg_config --sharedir)
-
-    mkdir -p $out/lib
-    mkdir -p $out/share/postgresql/extension
-
-    found_so=false
-    if [ -d "$out$PKGLIBDIR" ]; then
-        echo "Looking for .so in $out$PKGLIBDIR"
-        if mv $out$PKGLIBDIR/age*.so $out/lib/ 2>/dev/null; then
-            found_so=true
-            echo "Moved .so from $out$PKGLIBDIR"
-        fi
-    fi
-    if [ "$found_so" = "false" ] && [ -d "$out/usr/local/pgsql/lib" ]; then # Common fallback for non-DESTDIR compliant makefiles
-        echo "AGE .so not found in specific pkglibdir, trying $out/usr/local/pgsql/lib"
-        if mv $out/usr/local/pgsql/lib/age*.so $out/lib/ 2>/dev/null; then
-            found_so=true
-            echo "Moved .so from $out/usr/local/pgsql/lib"
-        fi
-    fi
-    if [ "$found_so" = "false" ]; then
-        echo "AGE .so not found in pkglibdir, searching more broadly in $out"
-        find "$out" -name "age*.so" -print -exec mv {} $out/lib/ \; || echo "Still no .so found"
-    fi
-
-    found_control_sql=false
-    if [ -d "$out$SHAREDIR/extension" ]; then
-        echo "Looking for control/sql in $out$SHAREDIR/extension"
-        if mv $out$SHAREDIR/extension/age*.* $out/share/postgresql/extension/ 2>/dev/null; then
-            found_control_sql=true
-            echo "Moved control/sql from $out$SHAREDIR/extension"
-        fi
-    fi
-    if [ "$found_control_sql" = "false" ] && [ -d "$out/usr/local/pgsql/share/extension" ]; then # Common fallback
-         echo "AGE control/sql not found in specific sharedir, trying $out/usr/local/pgsql/share/extension"
-        if mv $out/usr/local/pgsql/share/extension/age*.* $out/share/postgresql/extension/ 2>/dev/null; then
-            found_control_sql=true
-            echo "Moved control/sql from $out/usr/local/pgsql/share/extension"
-        fi
-    fi
-    if [ "$found_control_sql" = "false" ]; then
-        echo "AGE control/sql files not found in sharedir, searching more broadly in $out"
-        find "$out" -path "*/extension/age.control" -print -exec mv {} $out/share/postgresql/extension/ \; || echo "age.control not found"
-        find "$out" -path "*/extension/age--*.sql" -print -exec mv {} $out/share/postgresql/extension/ \; || echo "age SQL files not found"
-    fi
-
-    if [ -d "$out/usr" ]; then find "$out/usr" -depth -type d -empty -delete; fi
-    if [ -d "$out/nix" ]; then find "$out/nix" -depth -type d -empty -delete; fi
-
-    echo "Final .so files in $out/lib:"
-    ls -lR $out/lib | grep age || echo "No age .so files in $out/lib"
-    echo "Final .control/.sql files in $out/share/postgresql/extension:"
-    ls -lR $out/share/postgresql/extension | grep age || echo "No age control/sql files in $out/share/postgresql/extension"
-
+    make install USE_PGXS=1 PG_CONFIG=${postgresql}/bin/pg_config
     runHook postInstall
   '' else ''
-    echo "Skipping install for unsupported AGE/PG combination for ${pname}-${version}."
-    mkdir -p $out/lib $out/share/postgresql/extension # Create empty dirs so the derivation is valid
+    echo "Skipping install for unsupported AGE/PG combination."
+    mkdir -p $out/lib $out/share/postgresql/extension
   '';
 
   meta = with lib; {
@@ -3993,7 +4286,7 @@ stdenv.mkDerivation rec {
     license = licenses.asl20;
     platforms = postgresql.meta.platforms;
     maintainers = [ maintainers.barneycook ];
-    broken = !ageSrcInfo.isSupported; # Mark as broken if not supported for this PG major version
+    broken = !ageSrcInfo.isSupported;
   };
 }
 '''
@@ -4025,7 +4318,6 @@ stdenv.mkDerivation rec {
   meta = with lib; {
     description = "HTTP client for Postgres";
     homepage = "https://github.com/pramsey/${pname}";
-    maintainers = with maintainers; [ samrose ];
     platforms = postgresql.meta.platforms;
     license = licenses.postgresql;
   };
@@ -4077,7 +4369,6 @@ stdenv.mkDerivation {
     description = "Open Source PostgreSQL Audit Logging";
     homepage = "https://github.com/pgaudit/pgaudit";
     changelog = "https://github.com/pgaudit/pgaudit/releases/tag/${source.version}";
-    maintainers = with maintainers; [ samrose ];
     platforms = postgresql.meta.platforms;
     license = licenses.postgresql;
   };
@@ -4112,7 +4403,6 @@ stdenv.mkDerivation rec {
   meta = with lib; {
     description = "Modern cryptography for PostgreSQL";
     homepage = "https://github.com/michelp/${pname}";
-    maintainers = with maintainers; [ samrose ];
     platforms = postgresql.meta.platforms;
     license = licenses.postgresql;
   };
@@ -4148,7 +4438,6 @@ stdenv.mkDerivation rec {
       as well as the ability to integrate with other TAP-emitting test frameworks.
       It can also be used in the xUnit testing style.
     '';
-    maintainers = with maintainers; [ samrose ];
     homepage = "https://pgtap.org";
     inherit (postgresql.meta) platforms;
     license = licenses.mit;
@@ -4184,7 +4473,6 @@ stdenv.mkDerivation rec {
   meta = with lib; {
     description = "Hypothetical Indexes for PostgreSQL";
     homepage = "https://github.com/HypoPG/${pname}";
-    maintainers = with maintainers; [ samrose ];
     platforms = postgresql.meta.platforms;
     license = licenses.postgresql;
   };
@@ -4248,7 +4536,6 @@ stdenv.mkDerivation rec {
     description = "A PostgreSQL/PostGIS extension that provides geospatial routing functionality";
     homepage    = "https://pgrouting.org/";
     changelog   = "https://github.com/pgRouting/pgrouting/releases/tag/v${version}";
-    maintainers = with maintainers; [ steve-chavez samrose ];
     platforms   = postgresql.meta.platforms;
     license     = licenses.gpl2Plus;
   };
@@ -4335,7 +4622,6 @@ stdenv.mkDerivation rec {
     homepage = "https://github.com/postgrespro/rum";
     license = licenses.postgresql;
     platforms = postgresql.meta.platforms;
-    maintainers = with maintainers; [ samrose ];
   };
 }
 
@@ -4443,7 +4729,10 @@ buildPgrxExtension_0_12_6 rec {
   env = lib.optionalAttrs stdenv.isDarwin {
     POSTGRES_LIB = "${postgresql}/lib";
     RUSTFLAGS = "-C link-arg=-undefined -C link-arg=dynamic_lookup";
-    PGPORT = "5433";
+    PGPORT = toString (5441 + 
+      (if builtins.match ".*_.*" postgresql.version != null then 1 else 0) +  # +1 for OrioleDB
+      ((builtins.fromJSON (builtins.substring 0 2 postgresql.version)) - 15) * 2);  # +2 for each major version
+
   };
 
   cargoLock = {
@@ -4483,7 +4772,6 @@ buildPgrxExtension_0_12_6 rec {
   meta = with lib; {
     description = "JSON Schema Validation for PostgreSQL";
     homepage = "https://github.com/supabase/${pname}";
-    maintainers = with maintainers; [ samrose ];
     platforms = postgresql.meta.platforms;
     license = licenses.postgresql;
   };
@@ -4528,7 +4816,6 @@ stdenv.mkDerivation rec {
     description = "Scales PostgreSQL for time-series data via automatic partitioning across time and space";
     homepage = "https://www.timescale.com/";
     changelog = "https://github.com/timescale/timescaledb/blob/${version}/CHANGELOG.md";
-    maintainers = with maintainers; [ samrose ];
     platforms = postgresql.meta.platforms;
     license = licenses.asl20;
     broken = versionOlder postgresql.version "13";
@@ -4606,7 +4893,6 @@ stdenv.mkDerivation rec {
   meta = with lib; {
     description = "Framework for 'Trusted Language Extensions' in PostgreSQL";
     homepage = "https://github.com/aws/${pname}";
-    maintainers = with maintainers; [ samrose ];
     platforms = postgresql.meta.platforms;
     license = licenses.postgresql;
   };
@@ -4660,7 +4946,6 @@ stdenv.mkDerivation rec {
     description = "Scales PostgreSQL for time-series data via automatic partitioning across time and space";
     homepage = "https://www.timescale.com/";
     changelog = "https://github.com/timescale/timescaledb/blob/${version}/CHANGELOG.md";
-    maintainers = with maintainers; [ samrose ];
     platforms = postgresql.meta.platforms;
     license = licenses.asl20;
     broken = versionOlder postgresql.version "13";
@@ -4746,7 +5031,7 @@ stdenv.mkDerivation rec {
 , openssl
 , pkg-config
 , postgresql
-, buildPgrxExtension_0_12_6
+, buildPgrxExtension_0_12_9
 , cargo
 , darwin
 , jq
@@ -4754,21 +5039,21 @@ stdenv.mkDerivation rec {
 , git
 }:
 let
-  rustVersion = "1.80.0";
+  rustVersion = "1.84.0";
   cargo = rust-bin.stable.${rustVersion}.default;
 in
-buildPgrxExtension_0_12_6 rec {
+buildPgrxExtension_0_12_9 rec {
   pname = "supabase-wrappers";
-  version = "0.4.4";
+  version = "0.5.0";
   # update the following array when the wrappers version is updated
   # required to ensure that extensions update scripts from previous versions are generated
-  previousVersions = ["0.4.3" "0.4.2" "0.4.1" "0.4.0" "0.3.1" "0.3.0" "0.2.0" "0.1.19" "0.1.18" "0.1.17" "0.1.16" "0.1.15" "0.1.14" "0.1.12" "0.1.11" "0.1.10" "0.1.9" "0.1.8" "0.1.7" "0.1.6" "0.1.5" "0.1.4" "0.1.1" "0.1.0"];
+  previousVersions = ["0.4.6" "0.4.5" "0.4.4" "0.4.3" "0.4.2" "0.4.1" "0.4.0" "0.3.1" "0.3.0" "0.2.0" "0.1.19" "0.1.18" "0.1.17" "0.1.16" "0.1.15" "0.1.14" "0.1.12" "0.1.11" "0.1.10" "0.1.9" "0.1.8" "0.1.7" "0.1.6" "0.1.5" "0.1.4" "0.1.1" "0.1.0"];
   inherit postgresql;
   src = fetchFromGitHub {
     owner = "supabase";
     repo = "wrappers";
     rev = "v${version}";
-    hash = "sha256-QoGFJpq8PuvMM8SS+VZd7MlNl56uFivRjs1tCtwX+oE=";
+    hash = "sha256-FbRTUcpEHBa5DI6dutvBeahYM0RZVAXIzIAZWIaxvn0";
   };
  
   nativeBuildInputs = [ pkg-config cargo git ];
@@ -4780,11 +5065,21 @@ buildPgrxExtension_0_12_6 rec {
 
   NIX_LDFLAGS = "-L${postgresql}/lib -lpq";
 
-  # Set necessary environment variables for pgrx
+  # Set necessary environment variables for pgrx in darwin only
   env = lib.optionalAttrs stdenv.isDarwin {
     POSTGRES_LIB = "${postgresql}/lib";
     RUSTFLAGS = "-C link-arg=-undefined -C link-arg=dynamic_lookup";
-    PGPORT = "5435";
+    # Calculate unique port for each PostgreSQL version:
+    # - Check if version contains underscore (indicating OrioleDB)
+    # - Add 1 to port if it's OrioleDB
+    # - Add 2 for each major version above 15
+    # Examples:
+    # - PostgreSQL 15.8 → 5435 + 0 + (15-15)*2 = 5435
+    # - PostgreSQL 17_0 (OrioleDB) → 5435 + 1 + (17-15)*2 = 5440
+    # - PostgreSQL 17.4 → 5435 + 0 + (17-15)*2 = 5439
+    PGPORT = toString (5534 + 
+      (if builtins.match ".*_.*" postgresql.version != null then 1 else 0) +  # +1 for OrioleDB
+      ((builtins.fromJSON (builtins.substring 0 2 postgresql.version)) - 15) * 2);  # +2 for each major version
   };
 
   OPENSSL_NO_VENDOR = 1;
@@ -4875,7 +5170,7 @@ buildPgrxExtension_0_12_6 rec {
    fi
    mv $out/lib/wrappers-${version}${postgresql.dlSuffix} $out/lib/wrappers${postgresql.dlSuffix}
    ln -s $out/lib/wrappers${postgresql.dlSuffix} $out/lib/wrappers-${version}${postgresql.dlSuffix}
- 
+
   echo "Creating wrappers.so symlinks to support pg_upgrade..."
   if [ -f "$out/lib/wrappers.so" ]; then
     while read -r previous_version; do
@@ -4899,7 +5194,6 @@ buildPgrxExtension_0_12_6 rec {
   meta = with lib; {
     description = "Various Foreign Data Wrappers (FDWs) for PostreSQL";
     homepage = "https://github.com/supabase/wrappers";
-    maintainers = with maintainers; [ samrose ];
     platforms = postgresql.meta.platforms;
     license = licenses.postgresql;
   };
