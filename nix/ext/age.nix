@@ -2,7 +2,7 @@
 
 let
   pgMajorStr = lib.versions.major postgresql.version; # e.g., "15" or "17"
-  ageVersion = "1.5.0"; # This is the AGE version
+  ageVersion = "1.5.0"; # This is the AGE version, defined here
 
   ageSrcInfo =
     if pgMajorStr == "15" then {
@@ -22,7 +22,7 @@ let
 in
 stdenv.mkDerivation rec {
   pname = "age";
-  inherit version; # version will be set to ageVersion
+  version = ageVersion; # Explicitly set version to ageVersion
 
   # Conditionally fetch source or use a dummy if unsupported
   src = if ageSrcInfo.isSupported then fetchurl {
@@ -60,17 +60,6 @@ stdenv.mkDerivation rec {
     fi
     echo "Flex version: $(flex --version)"
   '';
-
-  # buildPhase will be skipped by stdenv if src is a dummy and no buildPhase is specified
-  # For a real build:
-  # buildPhase = if ageSrcInfo.isSupported then ''
-  #   runHook preBuild
-  #   make
-  #   runHook postBuild
-  # '' else ''
-  #   echo "Skipping build for unsupported AGE/PG combination."
-  # '';
-
 
   installPhase = if ageSrcInfo.isSupported then ''
     runHook preInstall
