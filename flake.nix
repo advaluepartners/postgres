@@ -216,45 +216,18 @@
           };
         };
 
-        #makeOurPostgresPkgs = version:
-        #  let
-        #    postgresql = getPostgresqlPackage version;
-        #    extensionsToUse =
-        #      if (builtins.elem version [ "orioledb-17" ])
-        #      then orioledbExtensions
-        #     else if (builtins.elem version [ "17" ])
-        #     then dbExtensions17
-        #      else ourExtensions;
-        #  in
-        #  map (path: pkgs.callPackage path { inherit postgresql; }) extensionsToUse;
-
         makeOurPostgresPkgs = version:
           let
             postgresql = getPostgresqlPackage version;
             extensionsToUse =
               if (builtins.elem version [ "orioledb-17" ])
               then orioledbExtensions
-              else if (builtins.elem version [ "17" ])
-              then dbExtensions17
+             else if (builtins.elem version [ "17" ])
+             then dbExtensions17
               else ourExtensions;
-
-            # Define arguments that MIGHT be needed by some of your extensions
-            # callPackage is smart and only passes what an extension's function signature asks for.
-            commonLocalArgs = {
-              # supabase-groonga will NOT be passed from here to the pgroonga.nix above,
-              # as pgroonga.nix does not list it in its top-level arguments.
-              # It defines it locally.
-              # However, if OTHER extensions DID need supabase-groonga as an argument,
-              # it would be available here.
-              inherit supabase-groonga mecab-naist-jdic sfcgal; # Example common dependencies
-              # autoconf = pkgs.autoconf; # Not needed as arguments with the above pgroonga.nix
-              # automake = pkgs.automake;
-            };
-
           in
-          map (path:
-            pkgs.callPackage path ({ inherit postgresql; } // commonLocalArgs)
-          ) extensionsToUse;
+         map (path: pkgs.callPackage path { inherit postgresql; }) extensionsToUse;
+
 
         # Create an attrset that contains all the extensions included in a server.
         makeOurPostgresPkgsSet = version:
