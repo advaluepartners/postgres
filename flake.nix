@@ -98,6 +98,10 @@
           ec2instanceconnectcli
           paramiko
         ]);
+
+        # Add this new definition
+        nixFastBuild = pkgs.nix-fast-build or null;
+
         sfcgal = pkgs.callPackage ./nix/ext/sfcgal/sfcgal.nix { };
         supabase-groonga = pkgs.callPackage ./nix/supabase-groonga.nix { };
         mecab-naist-jdic = pkgs.callPackage ./nix/ext/mecab-naist-jdic/default.nix { };
@@ -1457,8 +1461,9 @@
                 dbmate
                 nushell
                 pythonEnv
-                nix-fast-build
-              ];
+                ] ++ pkgs.lib.optionals (nixFastBuild != null) [
+                nixFastBuild
+                ];
               shellHook = ''
                 export HISTFILE=.history
               '';
