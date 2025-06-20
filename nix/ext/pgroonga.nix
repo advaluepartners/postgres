@@ -23,11 +23,21 @@ stdenv.mkDerivation rec {
     "--with-groonga-plugin-dir=${supabase-groonga}/lib/groonga/plugins"
   ];
 
- makeFlags = [
+  makeFlags = [
     "HAVE_MSGPACK=1"
     "MSGPACK_PACKAGE_NAME=msgpack-c"
     "HAVE_MECAB=1"
   ];
+
+  # Override build phase to avoid the problematic pgroonga-check.mk
+  buildPhase = ''
+    runHook preBuild
+    
+    # Only build the main pgroonga extension, not the check module
+    make -f pgroonga.mk all
+    
+    runHook postBuild
+  '';
 
   NIX_CFLAGS_COMPILE = lib.optionalString stdenv.isDarwin (builtins.concatStringsSep " " [
     "-Wno-error=incompatible-function-pointer-types"
@@ -51,9 +61,13 @@ stdenv.mkDerivation rec {
 
   installPhase = ''
     mkdir -p $out/lib $out/share/postgresql/extension $out/bin
+    
+    # Install main pgroonga extension
     install -D pgroonga${postgresql.dlSuffix} -t $out/lib/
     install -D pgroonga.control -t $out/share/postgresql/extension
     install -D data/pgroonga-*.sql -t $out/share/postgresql/extension
+    
+    # Install pgroonga_database extension  
     install -D pgroonga_database${postgresql.dlSuffix} -t $out/lib/
     install -D pgroonga_database.control -t $out/share/postgresql/extension
     install -D data/pgroonga_database-*.sql -t $out/share/postgresql/extension

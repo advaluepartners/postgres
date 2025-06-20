@@ -13,6 +13,8 @@ stdenv.mkDerivation rec {
     hash = "sha256-qP9fOEWXw+wY49GopTizwxSBEGS0UoseJHVBtKS/BdI=";
   };
 
+  makeFlags = [ "USE_PGXS=1" ];
+
   installPhase = ''
     mkdir -p $out/lib
 

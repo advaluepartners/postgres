@@ -13,6 +13,7 @@ stdenv.mkDerivation rec {
     hash = "sha256-c1pxhTyrE5j6dY+M5eKAboQNofIORS+Dccz+7HKEKQI=";
   };
 
+  makeFlags = [ "USE_PGXS=1" ];
   env.NIX_CFLAGS_COMPILE = "-Wno-error";
 
   installPhase = ''

@@ -13,7 +13,7 @@ stdenv.mkDerivation rec {
     hash = "sha256-88uKPSnITRZ2VkelI56jZ9GWazG/Rn39QlyHKJKSKMM=";
   };
 
-  makeFlags = [ "USE_PGXS=1" ];  # ADD THIS LINE
+  makeFlags = [ "USE_PGXS=1" ];
 
   installPhase = ''
     mkdir -p $out/{lib,share/postgresql/extension}
