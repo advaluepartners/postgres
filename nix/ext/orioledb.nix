@@ -6,10 +6,10 @@ stdenv.mkDerivation rec {
   src = fetchFromGitHub {
     owner = "orioledb";
     repo = "orioledb";
-    rev = "beta11";  # or latest compatible version
-    sha256 = "sha256-HbuTcXNanFOl9YfvlSzQJon8CfAhc8TFwo/y7jXy51w=";
+    rev = "beta11";  # Updated version
+    sha256 = "sha256-NUz6KzRMP+zdTUPp/Cdf4WA4PfSq5OnSgFPzUxV/nHo=";  
   };
-  version = "beta11";  # match the rev above
+  version = "beta11";  # Updated version
   buildInputs = [ curl libkrb5 postgresql python3 openssl ];
   buildPhase = "make USE_PGXS=1 ORIOLEDB_PATCHSET_VERSION=6";
   installPhase = ''
@@ -30,7 +30,8 @@ stdenv.mkDerivation rec {
   '';
   doCheck = true;
   meta = with lib; {
-    description = "orioledb";
+    description = "OrioleDB storage engine for PostgreSQL";
+    homepage = "https://github.com/orioledb/orioledb";
     platforms = postgresql.meta.platforms;
     license = licenses.postgresql;
   };
