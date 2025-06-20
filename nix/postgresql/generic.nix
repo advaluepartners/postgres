@@ -84,12 +84,14 @@ let
       ++ lib.optionals stdenv'.isLinux [ linux-pam ]
       ++ lib.optionals (!stdenv'.isDarwin) [ libossp_uuid ]
       ++ lib.optionals (builtins.match "[0-9][0-9]_.*" version != null) [ 
-        perl bison flex docbook_xsl docbook_xml_dtd_45 docbook_xsl_ns libxslt
+        perl docbook_xsl docbook_xml_dtd_45 docbook_xsl_ns libxslt
       ];
 
     nativeBuildInputs = [
       makeWrapper
       pkg-config
+      bison
+      flex
     ]
       ++ lib.optionals jitSupport [ llvmPackages.llvm.dev nukeReferences patchelf ];
 
