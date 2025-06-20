@@ -13,6 +13,8 @@ stdenv.mkDerivation rec {
 
   buildInputs = [ postgresql ];
 
+  makeFlags = [ "USE_PGXS=1" ];
+
   installPhase = ''
     install -D -t $out/lib *${postgresql.dlSuffix}
     install -D -t $out/share/postgresql/extension *.sql

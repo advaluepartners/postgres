@@ -15,6 +15,8 @@ stdenv.mkDerivation (finalAttrs: {
 
   buildInputs = postgresql.buildInputs ++ [ postgresql ];
 
+  makeFlags = [ "USE_PGXS=1" ];
+
   src = fetchFromGitHub {
     owner = "reorg";
     repo = "pg_repack";
