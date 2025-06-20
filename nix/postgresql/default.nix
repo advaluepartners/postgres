@@ -3,6 +3,7 @@ let
   versions = {
     postgresql_15 = ./15.nix;
     postgresql_16 = ./16.nix;
+    postgresql_17 = ./17.nix;
     postgresql_orioledb-16 = ./orioledb-16.nix;
     postgresql_orioledb-17 = ./orioledb-17.nix;
   };
