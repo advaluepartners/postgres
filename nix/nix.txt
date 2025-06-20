@@ -5,6 +5,7 @@ The below represents the folders and files from the root paths:
 Each file is separated by '''--- followed by the file path and ending with ---.
 File content begins immediately after its path and extends until the next '''---
 
+
 File structure:
 
 nix/
@@ -4274,7 +4275,11 @@ buildPgrxExtension_0_12_9 rec {
 '''
 
 '''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/nix/ext/age.nix ---
-{ lib, stdenv, fetchurl, postgresql, openssl, bison, flex, pkgs }:
+{ lib, stdenv, fetchurl, postgresql, bison, flex, perl, pkgs }:
+
+# Apache AGE PostgreSQL Extension
+# Based on nixpkgs implementation pattern
+# Dependencies: bison, flex, perl (for keyword list generation)
 
 let
   pgMajorStr = lib.versions.major postgresql.version;
@@ -4304,20 +4309,44 @@ stdenv.mkDerivation rec {
     sha256 = ageSrcInfo.hash;
   } else pkgs.runCommand "fake-age-src-${pname}-${version}" {} "mkdir -p $out";
 
-  nativeBuildInputs = [ bison flex ];
-  buildInputs = [ postgresql openssl ];
+  # Following nixpkgs pattern: only essential build tools needed
+  nativeBuildInputs = [ bison flex perl ];
+  buildInputs = [ postgresql ];
 
+  # Key fix: Set explicit tool paths in makeFlags (nixpkgs approach)
   makeFlags = [
     "USE_PGXS=1" 
     "PG_CONFIG=${postgresql}/bin/pg_config"
+    # Critical: Explicit tool paths prevent "missing" script issues
+    "BISON=${bison}/bin/bison"
+    "FLEX=${flex}/bin/flex"
+    "PERL=${perl}/bin/perl"
   ];
-
-  # Remove the problematic preBuild section entirely
-  # The AGE makefile should handle the build process
 
   installPhase = if ageSrcInfo.isSupported then ''
     runHook preInstall
-    make install USE_PGXS=1 PG_CONFIG=${postgresql}/bin/pg_config
+    
+    # Install to our output directory, not PostgreSQL's read-only store path
+    mkdir -p $out/lib $out/share/postgresql/extension
+    
+    # Copy the shared library
+    cp age.so $out/lib/
+    
+    # Copy SQL and control files from the source
+    cp sql/age*.sql $out/share/postgresql/extension/ || true
+    cp age.control $out/share/postgresql/extension/ || true
+    
+    # Ensure we have the basic files (fallback if above fails)
+    if [ ! -f $out/share/postgresql/extension/age.control ]; then
+      echo "Warning: age.control not found in expected location"
+      find . -name "*.control" -exec cp {} $out/share/postgresql/extension/ \;
+    fi
+    
+    if [ ! -f $out/share/postgresql/extension/age--1.5.0.sql ]; then
+      echo "Warning: SQL files not found in sql/ directory"  
+      find . -name "*.sql" -exec cp {} $out/share/postgresql/extension/ \;
+    fi
+    
     runHook postInstall
   '' else ''
     echo "Skipping install for unsupported AGE/PG combination."
