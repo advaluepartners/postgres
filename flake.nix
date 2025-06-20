@@ -175,7 +175,8 @@
             x != ./nix/ext/timescaledb.nix &&
             x != ./nix/ext/timescaledb-2.9.1.nix &&
             x != ./nix/ext/plv8.nix &&
-            x != ./nix/ext/age.nix
+            x != ./nix/ext/age.nix &&
+            x != ./nix/ext/pgroonga.nix
         ) ourExtensions;
 
         orioledbExtensions = orioleFilteredExtensions ++ [ ./nix/ext/orioledb.nix ];
