@@ -59,63 +59,6 @@
     - name: Install Postgres from source
       import_tasks: tasks/setup-postgres.yml
 
-    # - name: Install PostgreSQL development files from nix
-    #   become: yes
-    #   shell: |
-    #     sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile install github:supabase/postgres/{{ git_commit_sha }}#psql_15.exts" -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile install github:supabase/postgres/{{ git_commit_sha }}#psql_15/exts.supautils"
-
-    # - name: Install PostgreSQL development files from local flake
-    #   become: yes
-    #   shell: |
-    #     sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && \
-    #       nix profile install /tmp/ansible-playbook#psql_15.exts && \
-    #       nix profile install /tmp/ansible-playbook#psql_15.exts.supautils"
-    #   when: stage2_nix
-    #   register: install_exts
-    #   retries: 3
-    #   delay: 5
-    #   until: install_exts.rc == 0
-
-    # # - name: Create PostgreSQL include structure
-    # #   file:
-    # #     path: "{{ item }}"
-    # #     state: directory
-    # #     owner: postgres
-    # #     group: postgres
-    # #     mode: '0755'
-    # #   with_items:
-    # #     - /usr/lib/postgresql/include
-    # #     - /usr/lib/postgresql/include/server
-    # #   when: stage2_nix
-
-    # - name: Ensure PostgreSQL include directories exist
-    #   file:
-    #     path: "{{ item }}"
-    #     state: directory
-    #     owner: postgres
-    #     group: postgres
-    #     mode: '0755'
-    #   with_items:
-    #     - /usr/lib/postgresql/include
-    #     - /usr/lib/postgresql/include/server
-    #   when: stage2_nix
-
-    # - name: Create symlink for PostgreSQL include directory
-    #   file:
-    #     src: "/var/lib/postgresql/.nix-profile/include"
-    #     dest: "/usr/lib/postgresql/include"
-    #     state: link
-    #     owner: postgres
-    #     group: postgres
-    #     mode: '0755'
-    #   become: yes
-    #   when: stage2_nix
-
-    # - name: Link PostgreSQL headers
-    #   shell: |
-    #     cp -r /var/lib/postgresql/.nix-profile/include/* /usr/lib/postgresql/include/server/
-    #   become: yes
-    #   when: stage2_nix
 
     - name: Install PgBouncer
       import_tasks: tasks/setup-pgbouncer.yml
@@ -168,7 +111,6 @@
         - install-supabase-internal
       when: debpkg_mode or nixpkg_mode or stage2_nix
 
-######### added stage2 
     - name: Install Supabase specific content
       import_tasks: tasks/setup-supabase-internal.yml
       tags:
@@ -374,12 +316,8 @@
       shell: |
         psql -d postgres -c "CREATE EXTENSION IF NOT EXISTS age;"
         psql -d postgres -c "LOAD 'age';"
-        # Consider if search_path needs to be set more permanently, e.g.,
-        # psql -d postgres -c "ALTER DATABASE postgres SET search_path = ag_catalog, \"$user\", public, extensions;"
-        # Or for specific roles:
-        # psql -d postgres -c "ALTER ROLE your_graph_user SET search_path = ag_catalog, \"$user\", public, extensions;"
-        # For now, this session-level set is fine for initial setup.
-        psql -d postgres -c "SET search_path = ag_catalog, \"$user\", public;"
+        # Only set search_path if ag_catalog schema exists
+        psql -d postgres -c "DO \$\$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = 'ag_catalog') THEN EXECUTE 'SET search_path = ag_catalog, \"\$user\", public'; END IF; END \$\$;"
       when: stage2_nix
       register: age_setup
       changed_when: "'CREATE EXTENSION' in age_setup.stdout" 
@@ -390,36 +328,6 @@
     - name: Setup and add extensions
       import_tasks: tasks/setup-extensions.yml
       when: stage2_nix
-
-    # - name: Ensure extension directory has correct ownership
-    #   file:
-    #     path: "/usr/lib/postgresql/share/postgresql/extension"
-    #     owner: postgres
-    #     group: postgres
-    #     recurse: yes
-    #   become: yes
-    #   when: stage2_nix
-
-    # - name: Ensure extension files have correct permissions
-    #   file:
-    #     path: "/usr/lib/postgresql/share/postgresql/extension"
-    #     mode: '0644'
-    #     recurse: yes
-    #   become: yes
-    #   when: stage2_nix
-
-    # - name: Run migrations
-    #   import_tasks: tasks/setup-migrations.yml
-    #   tags:
-    #     - migrations
-    #   when: debpkg_mode or stage2_nix
-
-    # - name: Stop Postgres Database without Systemd
-    #   become: yes
-    #   become_user: postgres
-    #   shell:
-    #     cmd: /usr/lib/postgresql/bin/pg_ctl -D /var/lib/postgresql/data stop
-    #   when: debpkg_mode    
 
     - name: Check if PostgreSQL PID file exists
       stat:
