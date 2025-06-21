@@ -6,10 +6,10 @@ stdenv.mkDerivation rec {
   src = fetchFromGitHub {
     owner = "orioledb";
     repo = "orioledb";
-    rev = "beta11";  # Updated version
-    sha256 = "sha256-NUz6KzRMP+zdTUPp/Cdf4WA4PfSq5OnSgFPzUxV/nHo=";  
+    rev = "beta10";  # Keep original version
+    sha256 = "sha256-O4OTi8ickylVXE9FURm5R++A+l15Z22YLna7OVzVMjc=";  
   };
-  version = "beta11";  # Updated version
+  version = "beta10";  # Keep original version
   buildInputs = [ curl libkrb5 postgresql python3 openssl ];
   buildPhase = "make USE_PGXS=1 ORIOLEDB_PATCHSET_VERSION=6";
   installPhase = ''

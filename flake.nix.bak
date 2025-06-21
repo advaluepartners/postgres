@@ -163,7 +163,7 @@
           ./nix/ext/wrappers/default.nix
           ./nix/ext/supautils.nix
           ./nix/ext/plv8.nix
-          ./nix/ext/age.nix   
+          #./nix/ext/age.nix
           ./nix/ext/pg_backtrace.nix 
         ];
 
@@ -186,7 +186,7 @@
           x != ./nix/ext/timescaledb.nix &&
           x != ./nix/ext/timescaledb-2.9.1.nix &&
           x != ./nix/ext/plv8.nix &&
-          x != ./nix/ext/age.nix &&      
+          x != ./nix/ext/age.nix &&        # ← Add this line
           x != ./nix/ext/pgroonga.nix
         ) ourExtensions;
 

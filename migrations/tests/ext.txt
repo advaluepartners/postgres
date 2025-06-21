@@ -1,0 +1,565 @@
+The below represents the folders and files from the root paths:
+- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests
+
+Each file is separated by '''--- followed by the file path and ending with ---.
+File content begins immediately after its path and extends until the next '''---
+
+
+*Directory: tests*
+Total words: 1458
+
+File structure:
+
+tests/
+
+    fixtures.sql
+    test.sql
+database/
+    exists.sql
+    privs.sql
+    test.sql
+storage/
+    exists.sql
+    privs.sql
+    test.sql
+extensions/
+    01-postgis.sql
+    02-pgrouting.sql
+    03-pgtap.sql
+    04-pg_cron.sql
+    05-pgaudit.sql
+    06-pgjwt.sql
+    07-pgsql-http.sql
+    08-plpgsql_check.sql
+    09-pg-safeupdate.sql
+    10-timescaledb.sql
+    11-wal2json.sql
+    12-pljava.sql
+    13-plv8.sql
+    14-pg_plan_filter.sql
+    15-pg_net.sql
+    16-rum.sql
+    17-pg_hashids.sql
+    18-pgsodium.sql
+    19-pg_graphql.sql
+    20-pg_stat_monitor.sql
+    21-auto_explain.sql
+    22-pg_jsonschema.sql
+    23-vault.sql
+    24-pgroonga.sql
+    25-wrappers.sql
+    26-hypopg.sql
+    27-pg_repack.sql
+    28-pgvector.sql
+    29-pg_tle.sql
+    test.sql
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/test.sql ---
+-- Check and create OrioleDB if available
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'orioledb') THEN
+        IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'orioledb') THEN
+            CREATE EXTENSION orioledb;
+        END IF;
+    END IF;
+END $$;
+
+-- Create all extensions
+\ir extensions/test.sql
+
+BEGIN;
+
+CREATE EXTENSION IF NOT EXISTS pgtap;
+
+SELECT no_plan();
+
+\ir fixtures.sql
+\ir database/test.sql
+\ir storage/test.sql
+
+SELECT * FROM finish();
+
+ROLLBACK;
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/fixtures.sql ---
+CREATE ROLE test_user_role;
+
+CREATE ROLE test_admin_role;
+
+GRANT authenticated TO test_user_role;
+
+GRANT postgres TO test_admin_role;
+
+INSERT INTO auth.users (id, "role", email)
+    VALUES (gen_random_uuid (), 'test_user_role', 'bob@supabase.com')
+RETURNING
+    * \gset bob_
+
+INSERT INTO auth.users (id, "role", email)
+    VALUES (gen_random_uuid (), 'test_user_role', 'alice@supabase.com')
+RETURNING
+    * \gset alice_
+
+INSERT INTO auth.users (id, "role", email)
+    VALUES (gen_random_uuid (), 'test_admin_role', 'admin@supabase.com')
+RETURNING
+    * \gset admin_
+
+CREATE OR REPLACE FUNCTION test_logout ()
+    RETURNS void
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    PERFORM
+        set_config('request.jwt.claim.sub', NULL, TRUE);
+    PERFORM
+        set_config('request.jwt.claim.role', NULL, TRUE);
+    PERFORM
+        set_config('request.jwt.claim.email', NULL, TRUE);
+    RESET ROLE;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION test_login (user_email text, logout_first boolean = TRUE)
+    RETURNS auth.users
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    auth_user auth.users;
+BEGIN
+    IF logout_first THEN
+        PERFORM
+            test_logout ();
+    END IF;
+    SELECT
+        * INTO auth_user
+    FROM
+        auth.users
+    WHERE
+        email = user_email;
+    PERFORM
+        set_config('request.jwt.claim.sub', (auth_user).id::text, TRUE);
+    PERFORM
+        set_config('request.jwt.claim.role', (auth_user).ROLE, TRUE);
+    PERFORM
+        set_config('request.jwt.claim.email', (auth_user).email, TRUE);
+    RAISE NOTICE '%', format( 'SET ROLE %I; -- Logging in as %L (%L)', (auth_user).ROLE, (auth_user).id, (auth_user).email);
+    EXECUTE format('SET ROLE %I', (auth_user).ROLE);
+    RETURN auth_user;
+END;
+$$;
+
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/database/test.sql ---
+
+\ir exists.sql
+\ir privs.sql
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/database/privs.sql ---
+SELECT database_privs_are(
+    'postgres', 'postgres', ARRAY['CONNECT', 'TEMPORARY', 'CREATE']
+);
+
+SELECT function_privs_are('pgsodium', 'crypto_aead_det_decrypt', array['bytea', 'bytea', 'uuid', 'bytea'], 'service_role', array['EXECUTE']);
+SELECT function_privs_are('pgsodium', 'crypto_aead_det_encrypt', array['bytea', 'bytea', 'uuid', 'bytea'], 'service_role', array['EXECUTE']);
+SELECT function_privs_are('pgsodium', 'crypto_aead_det_keygen', array[]::text[], 'service_role', array['EXECUTE']);
+
+-- Verify public schema privileges
+SELECT schema_privs_are('public', 'postgres', array['CREATE', 'USAGE']);
+SELECT schema_privs_are('public', 'anon', array['USAGE']);
+SELECT schema_privs_are('public', 'authenticated', array['USAGE']);
+SELECT schema_privs_are('public', 'service_role', array['USAGE']);
+
+set role postgres;
+create table test_priv();
+SELECT table_owner_is('test_priv', 'postgres');
+SELECT table_privs_are('test_priv', 'supabase_admin', array['DELETE', 'INSERT', 'REFERENCES', 'SELECT', 'TRIGGER', 'TRUNCATE', 'UPDATE']);
+SELECT table_privs_are('test_priv', 'postgres', array['DELETE', 'INSERT', 'REFERENCES', 'SELECT', 'TRIGGER', 'TRUNCATE', 'UPDATE']);
+SELECT table_privs_are('test_priv', 'anon', array['DELETE', 'INSERT', 'REFERENCES', 'SELECT', 'TRIGGER', 'TRUNCATE', 'UPDATE']);
+SELECT table_privs_are('test_priv', 'authenticated', array['DELETE', 'INSERT', 'REFERENCES', 'SELECT', 'TRIGGER', 'TRUNCATE', 'UPDATE']);
+SELECT table_privs_are('test_priv', 'service_role', array['DELETE', 'INSERT', 'REFERENCES', 'SELECT', 'TRIGGER', 'TRUNCATE', 'UPDATE']);
+reset role;
+
+-- Verify extensions schema privileges
+SELECT schema_privs_are('extensions', 'postgres', array['CREATE', 'USAGE']);
+SELECT schema_privs_are('extensions', 'anon', array['USAGE']);
+SELECT schema_privs_are('extensions', 'authenticated', array['USAGE']);
+SELECT schema_privs_are('extensions', 'service_role', array['USAGE']);
+
+-- Role memberships
+SELECT is_member_of('pg_read_all_data', 'postgres');
+SELECT is_member_of('pg_signal_backend', 'postgres');
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/database/exists.sql ---
+
+SELECT has_schema('public');
+SELECT has_schema('auth');
+SELECT has_schema('extensions');
+SELECT has_schema('graphql');
+SELECT has_schema('graphql_public');
+SELECT has_schema('realtime');
+SELECT has_schema('storage');
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/storage/test.sql ---
+
+\ir exists.sql
+\ir privs.sql
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/storage/privs.sql ---
+select is_member_of('authenticator', 'supabase_storage_admin');
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/storage/exists.sql ---
+
+-- Sanity test object existence in storage schema
+
+select has_table('storage'::name, 'buckets'::name);
+select has_table('storage'::name, 'objects'::name);
+select has_table('storage'::name, 'migrations'::name);
+select has_function('storage'::name, 'foldername'::name);
+select has_function('storage'::name, 'filename'::name);
+select has_function('storage'::name, 'extension'::name);
+select has_function('storage'::name, 'search'::name);
+
+select todo('This test should probably fail.'); select schema_privs_are('storage', 'anon', ARRAY['USAGE']);
+
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/extensions/17-pg_hashids.sql ---
+BEGIN;
+create extension if not exists pg_hashids with schema "extensions";
+ROLLBACK;
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/extensions/27-pg_repack.sql ---
+BEGIN;
+create extension if not exists pg_repack with schema "extensions";
+ROLLBACK;
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/extensions/15-pg_net.sql ---
+BEGIN;
+-- create net extension as supabase_admin
+create extension if not exists pg_net with schema "extensions";
+
+-- \ir migrations/db/init-scripts/00000000000003-post-setup.sql
+grant usage on schema net TO postgres, anon, authenticated, service_role;
+alter function net.http_get(url text, params jsonb, headers jsonb, timeout_milliseconds integer) security definer;
+alter function net.http_post(url text, body jsonb, params jsonb, headers jsonb, timeout_milliseconds integer) security definer;
+alter function net.http_get(url text, params jsonb, headers jsonb, timeout_milliseconds integer) SET search_path = net;
+alter function net.http_post(url text, body jsonb, params jsonb, headers jsonb, timeout_milliseconds integer) SET search_path = net;
+revoke all on function net.http_get(url text, params jsonb, headers jsonb, timeout_milliseconds integer) from public;
+revoke all on function net.http_post(url text, body jsonb, params jsonb, headers jsonb, timeout_milliseconds integer) from public;
+grant execute on function net.http_get(url text, params jsonb, headers jsonb, timeout_milliseconds integer) TO postgres, anon, authenticated, service_role;
+grant execute on function net.http_post(url text, body jsonb, params jsonb, headers jsonb, timeout_milliseconds integer) TO postgres, anon, authenticated, service_role;
+
+-- postgres role should have access
+set local role postgres;
+select net.http_get('http://localhost', null::jsonb, null::jsonb, 100);
+
+-- authenticated role should have access
+set local role authenticated;
+select net.http_get('http://localhost', null::jsonb, null::jsonb, 100);
+ROLLBACK;
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/extensions/test.sql ---
+
+\ir 01-postgis.sql
+\ir 02-pgrouting.sql
+\ir 03-pgtap.sql
+\ir 04-pg_cron.sql
+\ir 05-pgaudit.sql
+\ir 06-pgjwt.sql
+\ir 07-pgsql-http.sql
+\ir 08-plpgsql_check.sql
+\ir 09-pg-safeupdate.sql
+\ir 10-timescaledb.sql
+\ir 11-wal2json.sql
+-- \ir 12-pljava.sql
+\ir 13-plv8.sql
+\ir 14-pg_plan_filter.sql
+\ir 15-pg_net.sql
+\ir 16-rum.sql
+\ir 17-pg_hashids.sql
+\ir 18-pgsodium.sql
+\ir 19-pg_graphql.sql
+\ir 20-pg_stat_monitor.sql
+\ir 21-auto_explain.sql
+\ir 22-pg_jsonschema.sql
+\ir 23-vault.sql
+\ir 24-pgroonga.sql
+\ir 25-wrappers.sql
+\ir 26-hypopg.sql
+\ir 27-pg_repack.sql
+\ir 28-pgvector.sql
+\ir 29-pg_tle.sql
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/extensions/26-hypopg.sql ---
+BEGIN;
+create extension if not exists hypopg with schema "extensions";
+ROLLBACK;
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/extensions/29-pg_tle.sql ---
+BEGIN;
+create schema if not exists "pgtle";
+create extension if not exists pg_tle with schema "pgtle";
+ROLLBACK;
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/extensions/13-plv8.sql ---
+BEGIN;
+create extension if not exists plv8 with schema "pg_catalog";
+ROLLBACK;
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/extensions/12-pljava.sql ---
+BEGIN;
+create extension if not exists pljava with schema "sqlj";
+ROLLBACK;
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/extensions/18-pgsodium.sql ---
+BEGIN;
+create schema if not exists "pgsodium";
+create extension if not exists pgsodium with schema "pgsodium";
+ROLLBACK;
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/extensions/01-postgis.sql ---
+BEGIN;
+create extension if not exists postgis_sfcgal with schema "extensions" cascade;
+ROLLBACK;
+
+BEGIN;
+create extension if not exists postgis_raster with schema "extensions" cascade;
+ROLLBACK;
+
+BEGIN;
+-- create postgis tiger as supabase_admin
+create extension if not exists address_standardizer with schema extensions;
+create extension if not exists postgis_tiger_geocoder cascade;
+
+-- \ir ansible/files/postgresql_extension_custom_scripts/postgis_tiger_geocoder/after-create.sql
+grant usage on schema tiger, tiger_data to postgres with grant option;
+grant all privileges on all tables in schema tiger, tiger_data to postgres with grant option;
+grant all privileges on all routines in schema tiger, tiger_data to postgres with grant option;
+grant all privileges on all sequences in schema tiger, tiger_data to postgres with grant option;
+alter default privileges in schema tiger, tiger_data grant all on tables to postgres with grant option;
+alter default privileges in schema tiger, tiger_data grant all on routines to postgres with grant option;
+alter default privileges in schema tiger, tiger_data grant all on sequences to postgres with grant option;
+SET search_path TO extensions, public, tiger, tiger_data;
+-- postgres role should have access
+set local role postgres;
+select tiger.pprint_addy(tiger.pagc_normalize_address('710 E Ben White Blvd, Austin, TX 78704'));
+
+-- other roles can be granted access
+grant usage on schema tiger, tiger_data to authenticated;
+grant select on all tables in schema tiger, tiger_data to authenticated;
+grant execute on all routines in schema tiger, tiger_data to authenticated;
+
+-- authenticated role should have access now
+set local role authenticated;
+select tiger.pprint_addy(tiger.pagc_normalize_address('710 E Ben White Blvd, Austin, TX 78704'));
+ROLLBACK;
+
+BEGIN;
+-- address standardizer creates a table in extensions schema, owned by supabase_admin
+create extension if not exists address_standardizer_data_us with schema extensions;
+-- postgres role should have access
+set local role postgres;
+select * from extensions.us_lex;
+ROLLBACK;
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/extensions/23-vault.sql ---
+BEGIN;
+create schema if not exists "vault";
+create extension if not exists supabase_vault with schema "vault" cascade;
+ROLLBACK;
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/extensions/24-pgroonga.sql ---
+BEGIN;
+create extension if not exists pgroonga with schema "extensions";
+ROLLBACK;
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/extensions/22-pg_jsonschema.sql ---
+BEGIN;
+create extension if not exists pg_jsonschema with schema "extensions";
+ROLLBACK;
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/extensions/02-pgrouting.sql ---
+BEGIN;
+create extension if not exists pgrouting with schema "extensions" cascade;
+ROLLBACK;
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/extensions/05-pgaudit.sql ---
+BEGIN;
+create extension if not exists pgaudit with schema "extensions";
+ROLLBACK;
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/extensions/09-pg-safeupdate.sql ---
+BEGIN;
+alter role postgres set session_preload_libraries = 'safeupdate';
+ROLLBACK;
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/extensions/04-pg_cron.sql ---
+BEGIN;
+-- create cron extension as supabase_admin
+create extension if not exists pg_cron;
+
+-- \ir migrations/db/init-scripts/00000000000003-post-setup.sql
+grant usage on schema cron to postgres with grant option;
+alter default privileges in schema cron grant all on tables to postgres with grant option;
+alter default privileges in schema cron grant all on routines to postgres with grant option;
+alter default privileges in schema cron grant all on sequences to postgres with grant option;
+grant all privileges on all tables in schema cron to postgres with grant option;
+grant all privileges on all routines in schema cron to postgres with grant option;
+grant all privileges on all sequences in schema cron to postgres with grant option;
+
+-- postgres role should have access
+set local role postgres;
+select * from cron.job;
+
+-- other roles can be granted access
+grant usage on schema cron to authenticated;
+grant select on all tables in schema cron to authenticated;
+
+-- authenticated role should have access now
+set local role authenticated;
+select * from cron.job;
+ROLLBACK;
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/extensions/28-pgvector.sql ---
+BEGIN;
+create extension if not exists vector with schema "extensions";
+ROLLBACK;
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/extensions/25-wrappers.sql ---
+BEGIN;
+create extension if not exists wrappers with schema "extensions";
+ROLLBACK;
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/extensions/14-pg_plan_filter.sql ---
+BEGIN;
+alter role postgres set session_preload_libraries = 'plan_filter';
+ROLLBACK;
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/extensions/11-wal2json.sql ---
+BEGIN;
+select pg_drop_replication_slot(slot_name) from pg_replication_slots where slot_name = 'test_slot';
+select * from pg_create_logical_replication_slot('test_slot', 'wal2json');
+-- a rollback of the txn does not remove the logical replication slot that gets created, so we need to manually drop it
+select pg_drop_replication_slot(slot_name) from pg_replication_slots where slot_name = 'test_slot';
+ROLLBACK;
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/extensions/10-timescaledb.sql ---
+BEGIN;
+create extension if not exists timescaledb with schema "extensions";
+ROLLBACK;
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/extensions/21-auto_explain.sql ---
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/extensions/03-pgtap.sql ---
+BEGIN;
+create extension if not exists pgtap with schema "extensions";
+ROLLBACK;
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/extensions/16-rum.sql ---
+BEGIN;
+create extension if not exists rum with schema "extensions";
+ROLLBACK;
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/extensions/07-pgsql-http.sql ---
+BEGIN;
+create extension if not exists http with schema "extensions";
+ROLLBACK;
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/extensions/06-pgjwt.sql ---
+BEGIN;
+create extension if not exists pgjwt with schema "extensions" cascade;
+ROLLBACK;
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/extensions/19-pg_graphql.sql ---
+BEGIN;
+create schema if not exists "graphql";
+create extension if not exists pg_graphql with schema "graphql";
+ROLLBACK;
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/extensions/20-pg_stat_monitor.sql ---
+BEGIN;
+create extension if not exists pg_stat_monitor with schema "extensions";
+ROLLBACK;
+
+'''
+
+'''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/extensions/08-plpgsql_check.sql ---
+BEGIN;
+create extension if not exists plpgsql_check with schema "extensions";
+ROLLBACK;
+
+'''
+

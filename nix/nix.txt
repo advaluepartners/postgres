@@ -6,6 +6,9 @@ Each file is separated by '''--- followed by the file path and ending with ---.
 File content begins immediately after its path and extends until the next '''---
 
 
+*Directory: nix*
+Total words: 22601
+
 File structure:
 
 nix/
@@ -119,7 +122,7 @@ cargo-pgrx/
 
 
 *File: flake.nix*
-Words: 5294
+Words: 5299
 
 '''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/nix/init.sh ---
 #!/bin/bash
@@ -382,10 +385,9 @@ import ./generic.nix {
 
 '''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/nix/postgresql/orioledb-17.nix ---
 import ./generic.nix {
-  version = "17_5";
-  hash = "sha256-OgXLpFanNp+ngPFKyCEDUFvIEWQ9nK/1csUO9lVTXaQ=";
+  version = "17_6";
+  hash = "sha256-HbuTcXNanFOl9YfvlSzQJon8CfAhc8TFwo/y7jXy51w=";
 }
-
 '''
 
 '''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/nix/postgresql/default.nix ---
@@ -3432,10 +3434,10 @@ stdenv.mkDerivation rec {
   src = fetchFromGitHub {
     owner = "orioledb";
     repo = "orioledb";
-    rev = "beta10";
-    sha256 = "sha256-O4OTi8ickylVXE9FURm5R++A+l15Z22YLna7OVzVMjc=";
+    rev = "beta10";  # Keep original version
+    sha256 = "sha256-O4OTi8ickylVXE9FURm5R++A+l15Z22YLna7OVzVMjc=";  
   };
-  version = "beta10";
+  version = "beta10";  # Keep original version
   buildInputs = [ curl libkrb5 postgresql python3 openssl ];
   buildPhase = "make USE_PGXS=1 ORIOLEDB_PATCHSET_VERSION=6";
   installPhase = ''
@@ -3456,12 +3458,12 @@ stdenv.mkDerivation rec {
   '';
   doCheck = true;
   meta = with lib; {
-    description = "orioledb";
+    description = "OrioleDB storage engine for PostgreSQL";
+    homepage = "https://github.com/orioledb/orioledb";
     platforms = postgresql.meta.platforms;
     license = licenses.postgresql;
   };
 }
-
 '''
 
 '''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/nix/ext/pg_net.nix ---
@@ -6849,6 +6851,7 @@ rustPlatform.buildRustPackage finalArgs
           ./nix/ext/supautils.nix
           ./nix/ext/plv8.nix
           ./nix/ext/age.nix
+          ./nix/ext/pg_backtrace.nix 
         ];
 
         #Where we import and build the orioledb extension, we add on our custom extensions
@@ -6860,7 +6863,8 @@ rustPlatform.buildRustPackage finalArgs
             x != ./nix/ext/timescaledb.nix &&
             x != ./nix/ext/timescaledb-2.9.1.nix &&
             x != ./nix/ext/plv8.nix &&
-            x != ./nix/ext/age.nix
+            x != ./nix/ext/age.nix &&
+            x != ./nix/ext/pgroonga.nix
         ) ourExtensions;
 
         orioledbExtensions = orioleFilteredExtensions ++ [ ./nix/ext/orioledb.nix ];
