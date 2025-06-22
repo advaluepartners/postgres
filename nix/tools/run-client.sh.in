@@ -14,7 +14,8 @@ print_help() {
     echo "Usage: nix run .#start-client -- [options]"
     echo
     echo "Options:"
-    echo "  -v, --version [15|16|orioledb-16]  Specify the PostgreSQL version to use (required)"
+    echo "  -v, --version [15|16
+    |orioledb-16]  Specify the PostgreSQL version to use (required)"
     echo "  -f, --file FILE                    Provide a custom migration script"
     echo "  -u, --user USER                    Specify the user/role to use (default: postgres)"
     echo "  -h, --help                         Show this help message"

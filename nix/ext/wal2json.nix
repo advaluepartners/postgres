@@ -16,8 +16,32 @@ stdenv.mkDerivation rec {
   makeFlags = [ "USE_PGXS=1" ];
 
   installPhase = ''
-    install -D -t $out/lib *${postgresql.dlSuffix}
+    runHook preInstall
+    mkdir -p $out/{lib,share/postgresql/extension}
+    
+    # Install shared library
+    install -D *${postgresql.dlSuffix} $out/lib
+    
+    # Install SQL files
     install -D -t $out/share/postgresql/extension sql/*.sql
+    
+    # Create control file for wal2json extension
+    cat > $out/share/postgresql/extension/wal2json.control << EOF
+# wal2json extension
+comment = 'JSON output plugin for changeset extraction'
+default_version = '2.6'
+module_pathname = '\$libdir/wal2json'
+relocatable = false
+EOF
+    
+    # Create main SQL file
+    cat > $out/share/postgresql/extension/wal2json--2.6.sql << EOF
+-- wal2json extension
+-- This extension provides JSON output for logical decoding
+-- The actual functionality is implemented in the wal2json shared library
+EOF
+    
+    runHook postInstall
   '';
 
   meta = with lib; {
