@@ -1,0 +1,15 @@
+2025/06/24 13:46:43 [INFO] Packer version: 1.12.0 [go1.22.9 darwin arm64]
+2025/06/24 13:46:43 [INFO] PACKER_CONFIG env var not set; checking the default config file path
+2025/06/24 13:46:43 [INFO] PACKER_CONFIG env var set; attempting to open config file: /Users/barneycook/.packerconfig
+2025/06/24 13:46:43 [WARN] Config file doesn't exist: /Users/barneycook/.packerconfig
+2025/06/24 13:46:43 [INFO] Setting cache directory: /Users/barneycook/.cache/packer
+
+The configuration file "common-nix.vars.pkr.hcl" could not be read.
+
+2025/06/24 13:46:43 [INFO] (telemetry) Finalizing.
+Error: Failed to read file
+
+The configuration file "common-nix.vars.pkr.hcl" could not be read.
+
+
+2025/06/24 13:46:44 waiting for all plugin processes to complete...
