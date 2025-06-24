@@ -1,120 +1,216 @@
-# Postgres + goodies
+```markdown
+# ProjectRef PostgreSQL AMI & Tooling
 
-Unmodified Postgres with some useful plugins. Our goal with this repo is not to modify Postgres, but to provide some of the most common extensions with a one-click install.
+This repository contains the infrastructure-as-code and tooling to build customized Amazon Machine Images (AMIs) for PostgreSQL, along with local development utilities. It leverages HashiCorp Packer for AMI creation and Nix for managing dependencies and building PostgreSQL with a specific set of extensions.
 
-## Primary Features
-- ✅ Postgres [15](https://www.postgresql.org/about/news/postgresql-15-released-2526/).
-- ✅ Ubuntu 20.04 (Focal Fossa).
-- ✅ [wal_level](https://www.postgresql.org/docs/current/runtime-config-wal.html) = logical and [max_replication_slots](https://www.postgresql.org/docs/current/runtime-config-replication.html) = 5. Ready for replication.
-- ✅ [Large Systems Extensions](https://github.com/aws/aws-graviton-getting-started#building-for-graviton-and-graviton2). Enabled for ARM images.
+## Purpose
 
-## Extensions 
-| Extension | Version | Description |
-| ------------- | :-------------: | ------------- |
-| [Postgres contrib modules](https://www.postgresql.org/docs/current/contrib.html) | - | Because everyone should enable `pg_stat_statements`. |
-| [PostGIS](https://postgis.net/) | [3.3.2](https://git.osgeo.org/gitea/postgis/postgis/raw/tag/3.3.2/NEWS) | Postgres' most popular extension - support for geographic objects. |
-| [pgRouting](https://pgrouting.org/) | [v3.4.1](https://github.com/pgRouting/pgrouting/releases/tag/v3.4.1) | Extension of PostGIS - provides geospatial routing functionalities. |
-| [pgTAP](https://pgtap.org/) | [v1.2.0](https://github.com/theory/pgtap/releases/tag/v1.2.0) | Unit Testing for Postgres. |
-| [pg_cron](https://github.com/citusdata/pg_cron) | [v1.6.2](https://github.com/citusdata/pg_cron/releases/tag/v1.6.2) | Run CRON jobs inside Postgres. |
-| [pgAudit](https://www.pgaudit.org/) | [1.7.0](https://github.com/pgaudit/pgaudit/releases/tag/1.7.0) | Generate highly compliant audit logs. |
-| [pgjwt](https://github.com/michelp/pgjwt) | [commit](https://github.com/michelp/pgjwt/commit/9742dab1b2f297ad3811120db7b21451bca2d3c9) | Generate JSON Web Tokens (JWT) in Postgres. |
-| [pgsql-http](https://github.com/pramsey/pgsql-http) | [1.5.0](https://github.com/pramsey/pgsql-http/releases/tag/v1.5.0) | HTTP client for Postgres. |
-| [plpgsql_check](https://github.com/okbob/plpgsql_check) | [2.2.3](https://github.com/okbob/plpgsql_check/releases/tag/v2.2.3) | Linter tool for PL/pgSQL. |
-| [pg-safeupdate](https://github.com/eradman/pg-safeupdate) | [1.4](https://github.com/eradman/pg-safeupdate/releases/tag/1.4) | Protect your data from accidental updates or deletes. |
-| [wal2json](https://github.com/eulerto/wal2json) | [commit](https://github.com/eulerto/wal2json/commit/53b548a29ebd6119323b6eb2f6013d7c5fe807ec) | JSON output plugin for logical replication decoding. |
-| [PL/Java](https://github.com/tada/pljava) | [1.6.4](https://github.com/tada/pljava/releases/tag/V1_6_4) | Write in Java functions in Postgres. |
-| [plv8](https://github.com/plv8/plv8) | [commit](https://github.com/plv8/plv8/commit/bcddd92f71530e117f2f98b92d206dafe824f73a) | Write in Javascript functions in Postgres. |
-| [pg_plan_filter](https://github.com/pgexperts/pg_plan_filter) | [commit](https://github.com/pgexperts/pg_plan_filter/commit/5081a7b5cb890876e67d8e7486b6a64c38c9a492) | Only allow statements that fulfill set criteria to be executed. |
-| [pg_net](https://github.com/supabase/pg_net) | [v0.6.1](https://github.com/supabase/pg_net/releases/tag/v0.6.1) | Expose the SQL interface for async networking. |
-| [pg_repack](https://github.com/reorg/pg_repack) | [ver_1.5.0](https://github.com/reorg/pg_repack/releases/tag/ver_1.5.0) | Tool to remove bloat from tables and indexes
-| [rum](https://github.com/postgrespro/rum) | [1.3.13](https://github.com/postgrespro/rum/releases/tag/1.3.13) | An alternative to the GIN index. |
-| [pg_hashids](https://github.com/iCyberon/pg_hashids) | [commit](https://github.com/iCyberon/pg_hashids/commit/83398bcbb616aac2970f5e77d93a3200f0f28e74) | Generate unique identifiers from numbers. |
-| [pgsodium](https://github.com/michelp/pgsodium) | [3.1.0](https://github.com/michelp/pgsodium/releases/tag/2.0.0) | Modern encryption API using libsodium. |
-| [pg_stat_monitor](https://github.com/percona/pg_stat_monitor) | [1.0.1](https://github.com/percona/pg_stat_monitor/releases/tag/1.0.1) | Query Performance Monitoring Tool for PostgreSQL
-| [pgvector](https://github.com/pgvector/pgvector) | [v0.4.0](https://github.com/pgvector/pgvector/releases/tag/v0.4.0) | Open-source vector similarity search for Postgres
+The primary goal is to produce pre-configured, optimized PostgreSQL AMIs tailored for our needs. This includes:
 
+*   **Specific PostgreSQL Versions:** Easily build AMIs for different major PostgreSQL versions (e.g., 15, 17, including variants like OrioleDB).
+*   **Curated Extensions:** Bake in a predefined list of common and custom PostgreSQL extensions directly into the image.
+*   **Standardized Configuration:** Apply consistent base configurations for PostgreSQL.
+*   **Reproducibility:** Use Nix to ensure that the PostgreSQL binaries and their dependencies are built reproducibly.
+*   **Automation:** Streamline the AMI creation process using Packer.
 
-Can't find your favorite extension? Suggest for it to be added into future releases [here](https://github.com/supabase/supabase/discussions/679)!
+This approach simplifies deployment, ensures consistency across environments, and reduces setup time for new PostgreSQL instances.
 
-## Enhanced Security
-*This is only available for our AWS EC2/ DO Droplet images*
+## Key Components
 
-Aside from having [ufw](https://help.ubuntu.com/community/UFW),[fail2ban](https://www.fail2ban.org/wiki/index.php/Main_Page), and [unattended-upgrades](https://wiki.debian.org/UnattendedUpgrades) installed, we also have the following enhancements in place: 
-| Enhancement | Description |
-| ------------- | ------------- |
-| [fail2ban filter](https://github.com/supabase/postgres/blob/develop/ansible/files/fail2ban_config/filter-postgresql.conf.j2) for PostgreSQL access | Monitors for brute force attempts over at port `5432`. |
-| [fail2ban filter](https://github.com/supabase/postgres/blob/develop/ansible/files/fail2ban_config/filter-pgbouncer.conf.j2) for PgBouncer access | Monitors for brute force attempts over at port `6543`. |
+*   **`flake.nix`:** The heart of the Nix configuration. It defines:
+    *   PostgreSQL package derivations for different versions.
+    *   The exact set of extensions to be included.
+    *   Development shells (`nix develop`) providing all necessary tools.
+    *   Nix Apps (`nix run .#appName`) for common tasks like starting a local server or building AMIs.
+*   **Packer Configuration Files (`*.pkr.hcl`):**
+    *   **Stage 1 (e.g., `amazon-arm64-nix.pkr.hcl`):** Builds a base AMI with Nix installed and essential system configurations. This stage often includes bootstrapping the system and running initial Ansible playbooks.
+    *   **Stage 2 (e.g., `stage2-nix-psql.pkr.hcl`):** Takes the Stage 1 AMI as a base, then uses Nix to install the specific PostgreSQL version and extensions, and applies final PostgreSQL configurations.
+*   **Ansible Playbooks (`ansible/`):** Used during the Packer build process to configure the instance, install software, and set up PostgreSQL.
+*   **Scripts (`scripts/`, `ebssurrogate/scripts/`):** Helper scripts used by Packer provisioners, often for bootstrapping Nix or running Ansible.
+*   **Migrations (`migrations/`):** SQL migration scripts for database schema setup.
+*   **Nix Overlays and Packages (`nix/`):** Custom Nix expressions for PostgreSQL itself or specific extensions.
 
-## Additional Goodies
-*This is only available for our AWS EC2/ DO Droplet images*
+## How to Build AMIs
 
-| Goodie | Version | Description |
-| ------------- | :-------------: | ------------- |
-| [PgBouncer](https://www.pgbouncer.org/) | [1.16.1](http://www.pgbouncer.org/changelog.html#pgbouncer-116x) | Set up Connection Pooling. |
-| [PostgREST](https://postgrest.org/en/stable/) | [v12.2.3](https://github.com/PostgREST/postgrest/releases/tag/v12.2.3) | Instantly transform your database into an RESTful API. |
-| [WAL-G](https://github.com/wal-g/wal-g#wal-g) | [v2.0.1](https://github.com/wal-g/wal-g/releases/tag/v2.0.1) | Tool for physical database backup and recovery. |
+The primary way to build AMIs is using the Nix app defined in `flake.nix`.
 
-## Install
+**Prerequisites:**
 
-See all installation instructions in the [repo wiki](https://github.com/supabase/postgres/wiki).
+*   [Nix installed](https://nixos.org/download.html) (with Flakes enabled).
+*   [Packer installed](https://developer.hashicorp.com/packer/downloads).
+*   [AWS CLI installed and configured](https://aws.amazon.com/cli/) with necessary permissions to create EC2 instances, AMIs, etc.
+*   `aws-vault` (if you use it for managing AWS credentials).
+*   `yq` (for parsing YAML, used by some helper scripts).
+*   A `development-arm.vars.pkr.hcl` file in the root directory containing your AWS VPC, subnet, and security group information for Packer to launch builder instances. Example:
+    ```hcl
+    // development-arm.vars.pkr.hcl
+    vpc_id     = "vpc-yourvpcid"
+    subnet_id  = "subnet-yoursubnetid"
+    security_group_ids = ["sg-yoursecuritygroupid"]
+    ```
+*   (If cloning private Git repositories during the build) A GitHub Personal Access Token.
 
-[![Docker](https://github.com/supabase/postgres/blob/develop/docs/img/docker.png)](https://github.com/supabase/postgres/wiki/Docker)
-[![Digital Ocean](https://github.com/supabase/postgres/blob/develop/docs/img/digital-ocean.png)](https://github.com/supabase/postgres/wiki/Digital-Ocean)
-[![AWS](https://github.com/supabase/postgres/blob/develop/docs/img/aws.png)](https://github.com/supabase/postgres/wiki/AWS-EC2)
+**Building (using the provided Nix app):**
 
-### Marketplace Images
-|   | Postgres & Extensions | PgBouncer | PostgREST | WAL-G |
-|---|:---:|:---:|:---:|:---:|
-| Supabase Postgres |  ✔️   | ❌    | ❌   |  ✔️   |
-| Supabase Postgres: PgBouncer Bundle  |  ✔️   |  ✔️  | ❌    |   ✔️ |
-| Supabase Postgres: PostgREST Bundle |  ✔️   |  ❌  |  ✔️   |   ✔️ |
-| Supabase Postgres: Complete Bundle |  ✔️  |  ✔️   | ✔️   | ✔️   |
+The `flake.nix` provides a `build-test-ami` app that orchestrates the two-stage build.
 
-#### Availability
-|   | AWS ARM | AWS x86 | Digital Ocean x86 |
-|---|:---:|:---:|:---:|
-| Supabase Postgres | Coming Soon | Coming Soon | Coming Soon |
-| Supabase Postgres: PgBouncer Bundle  | Coming Soon | Coming Soon | Coming Soon |
-| Supabase Postgres: PostgREST Bundle | Coming Soon | Coming Soon | Coming Soon |
-| Supabase Postgres: Complete Bundle | Coming Soon | Coming Soon | Coming Soon |
+1.  Navigate to the root of this repository.
+2.  Execute the build (replace `<profile-name>` and `<pg_major_version>`):
+    ```bash
+    # If using aws-vault
+    aws-vault exec <profile-name> -- nix run .#build-test-ami -- <pg_major_version>
 
-### Quick Build
+    # If AWS credentials are set via environment variables or default profile
+    # nix run .#build-test-ami -- <pg_major_version>
+    ```
+    For example, to build for PostgreSQL 15:
+    ```bash
+    aws-vault exec my-dev-profile -- nix run .#build-test-ami -- 15
+    ```
+    This script will:
+    *   Generate a `common-nix.vars.pkr.hcl` file.
+    *   Run Packer for Stage 1.
+    *   Run Packer for Stage 2, using the AMI from Stage 1.
+    *   Optionally run tests.
 
+**Building Manually (Stage by Stage):**
+
+You can also run Packer directly for each stage if you need more control.
+
+**Stage 1:**
+(Refer to the Stage 1 Packer HCL file, e.g., `amazon-arm64-nix.pkr.hcl`, and the `build-test-ami` script in `flake.nix` for required variables).
 ```bash
-$ time packer build -timestamp-ui \
-  --var "aws_access_key=<insert aws access key>" \
-  --var "aws_secret_key=<insert aws secret key>" \
-  --var "ami_regions=<insert desired regions>" \
-  amazon-arm.json
+# Example (variables will need to be set or passed):
+export AWS_PROFILE="your-profile"
+export TARGET_REGION="us-east-1"
+# ... other necessary variables ...
+
+packer init amazon-arm64-nix.pkr.hcl # Or your Stage 1 file
+packer build \
+  -var "profile=${AWS_PROFILE}" \
+  -var "region=${TARGET_REGION}" \
+  -var "ami_name=your-base-ami-name" \
+  -var "postgres-version=unique-build-id" \
+  # ... other -var flags ...
+  amazon-arm64-nix.pkr.hcl
 ```
 
-## Motivation
+**Stage 2:**
+(Refer to `stage2-nix-psql.pkr.hcl` and the `build-test-ami` script for variables). Stage 2 depends on a successful Stage 1 AMI.
+```bash
+# Example (variables will need to be set or passed):
+export AWS_PROFILE="your-profile"
+export TARGET_REGION="us-east-1"
+export STAGE1_BUILD_IDENTIFIER="unique-build-id" # Must match 'postgres-version' from Stage 1
+export POSTGRES_MAJOR_TO_BUILD="15"
+# ... other necessary variables ...
 
-- Make it fast and simple to get started with Postgres.
-- Show off a few of Postgres' most exciting features.
-- This is the same build we offer at [Supabase](https://supabase.io).
+# Ensure common-nix.vars.pkr.hcl and development-arm.vars.pkr.hcl are present
 
-## Roadmap
+packer init stage2-nix-psql.pkr.hcl
+packer build \
+  -var "profile=${AWS_PROFILE}" \
+  -var "region=${TARGET_REGION}" \
+  -var "ami_name=your-final-ami-base-name" \
+  -var "postgres-version=${STAGE1_BUILD_IDENTIFIER}" \
+  -var "postgres_major_version=${POSTGRES_MAJOR_TO_BUILD}" \
+  -var-file="development-arm.vars.pkr.hcl" \
+  -var-file="common-nix.vars.pkr.hcl" \
+  # ... other -var flags ...
+  stage2-nix-psql.pkr.hcl
+```
+The Stage 2 AMI will be named like `your-final-ami-base-name-unique-build-id`.
 
-- [Support for more images](https://github.com/supabase/postgres/issues/4)
-- [Vote for more plugins/extensions](https://github.com/supabase/postgres/issues/5)
-- Open a github issue if you have a feature request
+## Local Development
 
-## License
+Nix Flakes provide a consistent development environment.
 
-[The PostgreSQL License](https://opensource.org/licenses/postgresql). We realize that licensing is tricky since we are bundling all the various plugins. If we have infringed on any license, let us know and we will make the necessary changes (or remove that extension from this repo).
+1.  **Enter the development shell:**
+    ```bash
+    nix develop
+    ```
+    This makes tools like `psql` (from the Nix store), `packer`, `ansible`, `dbmate`, etc., available in your PATH.
 
-## Sponsors
+2.  **Using Nix Apps for local tasks:**
+    *   Start a local PostgreSQL server (PostgreSQL 15 by default):
+        ```bash
+        nix run .#start-server -- 15
+        # For PostgreSQL 17
+        # nix run .#start-server -- 17
+        ```
+    *   Connect to the local server:
+        ```bash
+        nix run .#start-client -- --version 15
+        ```
+    *   Run database migrations using `dbmate`:
+        ```bash
+        nix run .#dbmate-tool -- --version 15
+        ```
+    *   See all available commands/apps:
+        ```bash
+        nix run .#show-commands
+        # or
+        nix flake show
+        ```
 
-We are building the features of Firebase using enterprise-grade, open source products. We support existing communities wherever possible, and if the products don’t exist we build them and open source them ourselves.
+## Directory Structure Overview
 
-[![New Sponsor](https://user-images.githubusercontent.com/10214025/90518111-e74bbb00-e198-11ea-8f88-c9e3c1aa4b5b.png)](https://github.com/sponsors/supabase)
+*   `ansible/`: Ansible playbooks, roles, and configuration files.
+*   `ebssurrogate/`: Files and scripts specific to the `amazon-ebssurrogate` Packer builder, often used for more complex bootstrapping or chroot operations in Stage 1.
+*   `migrations/`: SQL migration files, managed by `dbmate`.
+*   `nix/`: Nix expressions for custom packages, PostgreSQL extensions, and development tools.
+    *   `ext/`: Nix derivations for individual PostgreSQL extensions.
+    *   `tools/`: Scripts made available as Nix apps.
+*   `scripts/`: General shell scripts used by Packer provisioners.
+*   `*.pkr.hcl`: Packer build template files.
+*   `flake.nix` / `flake.lock`: Nix Flake definition and lock file.
 
+---
 
-## Experimental Nix Packaging of resources
+Feel free to explore the `flake.nix` and Packer HCL files for more detailed insights into the build process and available configurations.
+```
 
-There is a `/nix` folder in this repo, plus a `flake.nix` and `flake.lock` that facilitate using the Nix package management system to package supabase/postgres, and all of our extensions and wrappers. A user will need nix installed on their machine. As of 4/1/2024 the package set only builds on target machines (`x86_64-linux` and `aarch64-linux`), however work is under way to also support building and using directly on `aarch64-darwin` (macOs). As of 4/1/2024, versions of packages and extensions are synced from `/ansible/vars.yml` via a utility that can be run by executing `nix run .#sync-exts-versions` (you must have nix installed and be on the supported `x86_64-linux` and `aarch64-linux` for this command to work). The short term goal is to sync these versions as they are updated by our infrastructure and postgres teams, then to see the nix packaged versions build successfully in parallel over time, along with tests of the nix packaged versions passing. 
+**Key things this README covers:**
 
-The supabase/postgres repo will continue to source it's dependencies from ansible for the short term, while we stabilize this nix build. 
+*   **Clear Purpose:** What the repo is for (building custom PostgreSQL AMIs).
+*   **Why it's useful:** Benefits like specific versions, curated extensions, reproducibility.
+*   **Core Technologies:** Mentions Packer and Nix.
+*   **Key Files/Directories:** Briefly explains `flake.nix`, Packer files, Ansible, etc.
+*   **How to Build AMIs:**
+    *   Lists prerequisites.
+    *   Highlights the primary `nix run .#build-test-ami` method.
+    *   Briefly mentions manual stage-by-stage building as an alternative.
+*   **Local Development:**
+    *   How to enter the Nix dev shell (`nix develop`).
+    *   Examples of using Nix apps (`nix run .#app`) for common local tasks.
+*   **Simple Directory Overview:** Helps users navigate.
+*   **Call to Action:** Encourages exploring specific files for more details.
 
-Forthcoming PR's will include: integrating the nix work into our ansible/packer builds, building natively on aarch64-darwin (macOs), more testing
+**To make it even better for *your specific repo*, you might want to customize:**
+
+*   **Replace placeholders:** Like `<profile-name>` or `your-base-ami-name`.
+*   **Specific AMI names:** If your Stage 1/2 HCL files have fixed names, mention them.
+*   **Prerequisites:** If you have other specific tools not covered by Nix, list them.
+*   **Contact/Support:** How to get help or ask questions.
+*   **Contributing:** If you want others to contribute.
+
+# Example (variables will need to be set or passed):
+export AWS_PROFILE="your-profile"
+export TARGET_REGION="us-east-1"
+export STAGE1_BUILD_IDENTIFIER="unique-build-id" # Must match 'postgres-version' from Stage 1
+export POSTGRES_MAJOR_TO_BUILD="15"
+# ... other necessary variables ...
+
+# Ensure common-nix.vars.pkr.hcl and development-arm.vars.pkr.hcl are present
+
+packer init stage2-nix-psql.pkr.hcl
+packer build \
+  -var "profile=${AWS_PROFILE}" \
+  -var "region=${TARGET_REGION}" \
+  -var "ami_name=your-final-ami-base-name" \
+  -var "postgres-version=${STAGE1_BUILD_IDENTIFIER}" \
+  -var "postgres_major_version=${POSTGRES_MAJOR_TO_BUILD}" \
+  -var-file="development-arm.vars.pkr.hcl" \
+  -var-file="common-nix.vars.pkr.hcl" \
+  # ... other -var flags ...
+  stage2-nix-psql.pkr.hcl

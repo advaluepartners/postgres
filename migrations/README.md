@@ -1,6 +1,6 @@
 # Usage
 
-from the root of the `supabase/postgres` project, you can run the following commands:
+from the root of the `advaluepartners/postgres` project, you can run the following commands:
 
 
 ```shell
@@ -25,17 +25,17 @@ Examples:
 This can also be run from a github "flake url" for example:
 
 ```shell
-nix run github:supabase/postgres#dbmate-tool -- --version 15
+nix run github:advaluepartners/postgres#dbmate-tool -- --version 15
 
 or
 
-nix run github:supabase/postgres/mybranch#dbmate-tool -- --version 15
+nix run github:advaluepartners/postgres/mybranch#dbmate-tool -- --version 15
 ```
 # supabase/migrations
 
 `supabase/migrations` is a consolidation of SQL migrations from:
 
-- supabase/postgres
+- advaluepartners/postgres
 - supabase/supabase
 - supabase/cli
 - supabase/infrastructure (internal)
@@ -57,7 +57,7 @@ For compatibility with hosted projects, we include [migrate.sh](migrate.sh) that
 2. Run all `db/migrations` with `supabase_admin` superuser role.
 3. Finalize role passwords with `/etc/postgresql.schema.sql` if present.
 
-Additionally, [supabase/postgres](https://github.com/supabase/postgres/blob/develop/ansible/playbook-docker.yml#L9) image contains several migration scripts to configure default extensions. These are run first by docker entrypoint and included in ami by ansible.
+Additionally, [advaluepartners/postgres](https://github.com/advaluepartners/postgres/blob/develop/ansible/playbook-docker.yml#L9) image contains several migration scripts to configure default extensions. These are run first by docker entrypoint and included in ami by ansible.
 
 
 
@@ -112,4 +112,4 @@ docker-compose run --rm dbmate up
 
 ## Testing
 
-Migrations are tested in CI to ensure they do not raise an exception against previously released `supabase/postgres` docker images. The full version matrix is at [test.yml](./.github/workflows/test.yml) in the `supabase-version` variable.
+Migrations are tested in CI to ensure they do not raise an exception against previously released `advaluepartners/postgres` docker images. The full version matrix is at [test.yml](./.github/workflows/test.yml) in the `capitala-version` variable.

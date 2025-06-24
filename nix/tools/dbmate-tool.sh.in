@@ -9,7 +9,7 @@ PORTNO="@PGSQL_DEFAULT_PORT@"
 PGSQL_SUPERUSER="@PGSQL_SUPERUSER@"
 PGPASSWORD="${PGPASSWORD:-postgres}"
 PGSQL_USER="postgres"
-FLAKE_URL="github:supabase/postgres"
+FLAKE_URL="github:advaluepartners/postgres"
 MIGRATIONS_DIR="@MIGRATIONS_DIR@"
 CURRENT_SYSTEM="@CURRENT_SYSTEM@"
 ANSIBLE_VARS="@ANSIBLE_VARS@"
@@ -266,8 +266,8 @@ EOSQL
     fi
 
     # Password update command
-    if ! "${PSQLBIN}/psql" -v ON_ERROR_STOP=1 --no-password --no-psqlrc -U postgres -p "$PORTNO" -h localhost -c "ALTER USER supabase_admin WITH PASSWORD '$PGPASSWORD'"; then
-        echo "Error: Failed to update supabase_admin password"
+    if ! "${PSQLBIN}/psql" -v ON_ERROR_STOP=1 --no-password --no-psqlrc -U postgres -p "$PORTNO" -h localhost -c "ALTER USER capitala_admin WITH PASSWORD '$PGPASSWORD'"; then
+        echo "Error: Failed to update capitala_admin password"
         exit 1
     fi
 
