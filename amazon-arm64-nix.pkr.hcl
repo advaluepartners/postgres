@@ -10,7 +10,7 @@ variable "profile" {
 
 variable "ami_name" {
   type    = string
-  default = "supabase-postgres"
+  default = "capitala-project-ami"
 }
 
 variable "ami_regions" {
