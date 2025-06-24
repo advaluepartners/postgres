@@ -7,7 +7,7 @@ create extension if not exists postgis_raster with schema "extensions" cascade;
 ROLLBACK;
 
 BEGIN;
--- create postgis tiger as supabase_admin
+-- create postgis tiger as capitala_admin
 create extension if not exists address_standardizer with schema extensions;
 create extension if not exists postgis_tiger_geocoder cascade;
 
@@ -35,7 +35,7 @@ select tiger.pprint_addy(tiger.pagc_normalize_address('710 E Ben White Blvd, Aus
 ROLLBACK;
 
 BEGIN;
--- address standardizer creates a table in extensions schema, owned by supabase_admin
+-- address standardizer creates a table in extensions schema, owned by capitala_admin
 create extension if not exists address_standardizer_data_us with schema extensions;
 -- postgres role should have access
 set local role postgres;

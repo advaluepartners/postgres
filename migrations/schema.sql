@@ -143,17 +143,17 @@ COMMENT ON EXTENSION pgjwt IS 'JSON Web Token API for Postgresql';
 
 
 --
--- Name: supabase_vault; Type: EXTENSION; Schema: -; Owner: -
+-- Name: capitala_vault; Type: EXTENSION; Schema: -; Owner: -
 --
 
-CREATE EXTENSION IF NOT EXISTS supabase_vault WITH SCHEMA vault;
+CREATE EXTENSION IF NOT EXISTS capitala_vault WITH SCHEMA vault;
 
 
 --
--- Name: EXTENSION supabase_vault; Type: COMMENT; Schema: -; Owner: -
+-- Name: EXTENSION capitala_vault; Type: COMMENT; Schema: -; Owner: -
 --
 
-COMMENT ON EXTENSION supabase_vault IS 'Supabase Vault Extension';
+COMMENT ON EXTENSION capitala_vault IS 'capitala Vault Extension';
 
 
 --
@@ -225,11 +225,11 @@ BEGIN
     alter default privileges in schema cron grant all on functions to postgres with grant option;
     alter default privileges in schema cron grant all on sequences to postgres with grant option;
 
-    alter default privileges for user supabase_admin in schema cron grant all
+    alter default privileges for user capitala_admin in schema cron grant all
         on sequences to postgres with grant option;
-    alter default privileges for user supabase_admin in schema cron grant all
+    alter default privileges for user capitala_admin in schema cron grant all
         on tables to postgres with grant option;
-    alter default privileges for user supabase_admin in schema cron grant all
+    alter default privileges for user capitala_admin in schema cron grant all
         on functions to postgres with grant option;
 
     grant all privileges on all tables in schema cron to postgres with grant option;
@@ -331,13 +331,13 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1
       FROM pg_roles
-      WHERE rolname = 'supabase_functions_admin'
+      WHERE rolname = 'capitala_functions_admin'
     )
     THEN
-      CREATE USER supabase_functions_admin NOINHERIT CREATEROLE LOGIN NOREPLICATION;
+      CREATE USER capitala_functions_admin NOINHERIT CREATEROLE LOGIN NOREPLICATION;
     END IF;
 
-    GRANT USAGE ON SCHEMA net TO supabase_functions_admin, postgres, anon, authenticated, service_role;
+    GRANT USAGE ON SCHEMA net TO capitala_functions_admin, postgres, anon, authenticated, service_role;
 
     ALTER function net.http_get(url text, params jsonb, headers jsonb, timeout_milliseconds integer) SECURITY DEFINER;
     ALTER function net.http_post(url text, body jsonb, params jsonb, headers jsonb, timeout_milliseconds integer) SECURITY DEFINER;
@@ -348,8 +348,8 @@ BEGIN
     REVOKE ALL ON FUNCTION net.http_get(url text, params jsonb, headers jsonb, timeout_milliseconds integer) FROM PUBLIC;
     REVOKE ALL ON FUNCTION net.http_post(url text, body jsonb, params jsonb, headers jsonb, timeout_milliseconds integer) FROM PUBLIC;
 
-    GRANT EXECUTE ON FUNCTION net.http_get(url text, params jsonb, headers jsonb, timeout_milliseconds integer) TO supabase_functions_admin, postgres, anon, authenticated, service_role;
-    GRANT EXECUTE ON FUNCTION net.http_post(url text, body jsonb, params jsonb, headers jsonb, timeout_milliseconds integer) TO supabase_functions_admin, postgres, anon, authenticated, service_role;
+    GRANT EXECUTE ON FUNCTION net.http_get(url text, params jsonb, headers jsonb, timeout_milliseconds integer) TO capitala_functions_admin, postgres, anon, authenticated, service_role;
+    GRANT EXECUTE ON FUNCTION net.http_post(url text, body jsonb, params jsonb, headers jsonb, timeout_milliseconds integer) TO capitala_functions_admin, postgres, anon, authenticated, service_role;
   END IF;
 END;
 $$;
@@ -995,10 +995,10 @@ ALTER TABLE ONLY storage.objects
 ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: supabase_realtime; Type: PUBLICATION; Schema: -; Owner: -
+-- Name: capitala_realtime; Type: PUBLICATION; Schema: -; Owner: -
 --
 
-CREATE PUBLICATION supabase_realtime WITH (publish = 'insert, update, delete, truncate');
+CREATE PUBLICATION capitala_realtime WITH (publish = 'insert, update, delete, truncate');
 
 
 --

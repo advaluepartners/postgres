@@ -94,17 +94,17 @@ GRANT authenticated TO test_user_role;
 GRANT postgres TO test_admin_role;
 
 INSERT INTO auth.users (id, "role", email)
-    VALUES (gen_random_uuid (), 'test_user_role', 'bob@supabase.com')
+    VALUES (gen_random_uuid (), 'test_user_role', 'bob@capitala.com')
 RETURNING
     * \gset bob_
 
 INSERT INTO auth.users (id, "role", email)
-    VALUES (gen_random_uuid (), 'test_user_role', 'alice@supabase.com')
+    VALUES (gen_random_uuid (), 'test_user_role', 'alice@capitala.com')
 RETURNING
     * \gset alice_
 
 INSERT INTO auth.users (id, "role", email)
-    VALUES (gen_random_uuid (), 'test_admin_role', 'admin@supabase.com')
+    VALUES (gen_random_uuid (), 'test_admin_role', 'admin@capitala.com')
 RETURNING
     * \gset admin_
 
@@ -180,7 +180,7 @@ SELECT schema_privs_are('public', 'service_role', array['USAGE']);
 set role postgres;
 create table test_priv();
 SELECT table_owner_is('test_priv', 'postgres');
-SELECT table_privs_are('test_priv', 'supabase_admin', array['DELETE', 'INSERT', 'REFERENCES', 'SELECT', 'TRIGGER', 'TRUNCATE', 'UPDATE']);
+SELECT table_privs_are('test_priv', 'capitala_admin', array['DELETE', 'INSERT', 'REFERENCES', 'SELECT', 'TRIGGER', 'TRUNCATE', 'UPDATE']);
 SELECT table_privs_are('test_priv', 'postgres', array['DELETE', 'INSERT', 'REFERENCES', 'SELECT', 'TRIGGER', 'TRUNCATE', 'UPDATE']);
 SELECT table_privs_are('test_priv', 'anon', array['DELETE', 'INSERT', 'REFERENCES', 'SELECT', 'TRIGGER', 'TRUNCATE', 'UPDATE']);
 SELECT table_privs_are('test_priv', 'authenticated', array['DELETE', 'INSERT', 'REFERENCES', 'SELECT', 'TRIGGER', 'TRUNCATE', 'UPDATE']);
@@ -219,7 +219,7 @@ SELECT has_schema('storage');
 '''
 
 '''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/storage/privs.sql ---
-select is_member_of('authenticator', 'supabase_storage_admin');
+select is_member_of('authenticator', 'capitala_storage_admin');
 
 '''
 
@@ -256,7 +256,7 @@ ROLLBACK;
 
 '''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/extensions/15-pg_net.sql ---
 BEGIN;
--- create net extension as supabase_admin
+-- create net extension as capitala_admin
 create extension if not exists pg_net with schema "extensions";
 
 -- \ir migrations/db/init-scripts/00000000000003-post-setup.sql
@@ -362,7 +362,7 @@ create extension if not exists postgis_raster with schema "extensions" cascade;
 ROLLBACK;
 
 BEGIN;
--- create postgis tiger as supabase_admin
+-- create postgis tiger as capitala_admin
 create extension if not exists address_standardizer with schema extensions;
 create extension if not exists postgis_tiger_geocoder cascade;
 
@@ -390,7 +390,7 @@ select tiger.pprint_addy(tiger.pagc_normalize_address('710 E Ben White Blvd, Aus
 ROLLBACK;
 
 BEGIN;
--- address standardizer creates a table in extensions schema, owned by supabase_admin
+-- address standardizer creates a table in extensions schema, owned by capitala_admin
 create extension if not exists address_standardizer_data_us with schema extensions;
 -- postgres role should have access
 set local role postgres;
@@ -402,7 +402,7 @@ ROLLBACK;
 '''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/extensions/23-vault.sql ---
 BEGIN;
 create schema if not exists "vault";
-create extension if not exists supabase_vault with schema "vault" cascade;
+create extension if not exists capitala_vault with schema "vault" cascade;
 ROLLBACK;
 
 '''
@@ -444,7 +444,7 @@ ROLLBACK;
 
 '''--- /Users/barneycook/Desktop/code/ProjectRef/postgres/migrations/tests/extensions/04-pg_cron.sql ---
 BEGIN;
--- create cron extension as supabase_admin
+-- create cron extension as capitala_admin
 create extension if not exists pg_cron;
 
 -- \ir migrations/db/init-scripts/00000000000003-post-setup.sql

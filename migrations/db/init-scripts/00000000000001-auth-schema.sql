@@ -1,6 +1,6 @@
 -- migrate:up
 
-CREATE SCHEMA IF NOT EXISTS auth AUTHORIZATION supabase_admin;
+CREATE SCHEMA IF NOT EXISTS auth AUTHORIZATION capitala_admin;
 
 -- auth.users definition
 
@@ -108,16 +108,16 @@ $$ language sql stable;
 -- usage on auth functions to API roles
 GRANT USAGE ON SCHEMA auth TO anon, authenticated, service_role;
 
--- Supabase super admin
-CREATE USER supabase_auth_admin NOINHERIT CREATEROLE LOGIN NOREPLICATION;
-GRANT ALL PRIVILEGES ON SCHEMA auth TO supabase_auth_admin;
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA auth TO supabase_auth_admin;
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA auth TO supabase_auth_admin;
-ALTER USER supabase_auth_admin SET search_path = "auth";
-ALTER table "auth".users OWNER TO supabase_auth_admin;
-ALTER table "auth".refresh_tokens OWNER TO supabase_auth_admin;
-ALTER table "auth".audit_log_entries OWNER TO supabase_auth_admin;
-ALTER table "auth".instances OWNER TO supabase_auth_admin;
-ALTER table "auth".schema_migrations OWNER TO supabase_auth_admin;
+-- capitala super admin
+CREATE USER capitala_auth_admin NOINHERIT CREATEROLE LOGIN NOREPLICATION;
+GRANT ALL PRIVILEGES ON SCHEMA auth TO capitala_auth_admin;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA auth TO capitala_auth_admin;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA auth TO capitala_auth_admin;
+ALTER USER capitala_auth_admin SET search_path = "auth";
+ALTER table "auth".users OWNER TO capitala_auth_admin;
+ALTER table "auth".refresh_tokens OWNER TO capitala_auth_admin;
+ALTER table "auth".audit_log_entries OWNER TO capitala_auth_admin;
+ALTER table "auth".instances OWNER TO capitala_auth_admin;
+ALTER table "auth".schema_migrations OWNER TO capitala_auth_admin;
 
 -- migrate:down

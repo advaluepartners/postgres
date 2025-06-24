@@ -25,11 +25,11 @@
         name: git
         state: present
 
-    - name: Clone advaluepartners/postgres repo
-      git:
-        repo: 'https://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@github.com/advaluepartners/postgres.git'
-        dest: /usr/local/src/advaluepartners-postgres
-        version: main
+    # - name: Clone advaluepartners/postgres repo
+    #   git:
+    #     repo: 'https://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@github.com/advaluepartners/postgres.git'
+    #     dest: /usr/local/src/advaluepartners-postgres
+    #     version: main
   
     - set_fact:
         supabase_internal: true

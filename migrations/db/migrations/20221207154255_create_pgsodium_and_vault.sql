@@ -15,7 +15,7 @@ BEGIN
   vault_exists = (
       select count(*) = 1 
       from pg_available_extensions 
-      where name = 'supabase_vault'
+      where name = 'capitala_vault'
   );
 
   IF pgsodium_exists 
@@ -32,7 +32,7 @@ BEGIN
 
     IF vault_exists
     THEN
-      create extension if not exists supabase_vault;
+      create extension if not exists capitala_vault;
     END IF;
   END IF;
 END $$;
