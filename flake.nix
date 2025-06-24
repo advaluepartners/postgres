@@ -264,7 +264,9 @@
             # Known problematic extensions for version 15
             problematicExtensions = if version == "15" then [
               ./nix/ext/pgroonga.nix  # Fails due to missing groonga.h
-              # Add other problematic extensions here as needed
+              ./nix/ext/plv8.nix       # Likely fails due to V8 dependencies
+              ./nix/ext/age.nix        # Might fail due to build issues
+		# Add other problematic extensions here as needed
             ] else [];
             
             # Filter out problematic extensions
