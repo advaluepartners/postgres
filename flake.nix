@@ -389,7 +389,7 @@
               PG_IDENT = "${paths.pgIdentConfigFile}";
               LOCALES = "${localeArchive}";
               EXTENSION_CUSTOM_SCRIPTS_DIR = "${paths.postgresqlExtensionCustomScriptsPath}";
-              MECAB_LIB = "${basePackages.psql_15.exts.pgroonga}/lib/groonga/plugins/tokenizers/tokenizer_mecab.so";
+              MECAB_LIB = "${supabase-groonga}/lib/groonga/plugins/tokenizers/tokenizer_mecab.so";
               GROONGA_DIR = "${supabase-groonga}";
               MIGRATIONS_DIR = "${paths.migrationsDir}";
               POSTGRESQL_SCHEMA_SQL = "${paths.postgresqlSchemaSql}";
