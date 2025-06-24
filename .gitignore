@@ -24,3 +24,4 @@ result*
 .vscode/
 
 
+nix/tests/expected/test_output.log
