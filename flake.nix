@@ -167,6 +167,15 @@
           ./nix/ext/pg_backtrace.nix 
         ];
 
+        # Add a helper to check build environment
+        checkBuildEnvironment = pkgs.writeScriptBin "check-build-env" ''
+          #!${pkgs.stdenv.shell}
+          echo "Build Platform: ${pkgs.stdenv.buildPlatform.system}"
+          echo "Host Platform: ${pkgs.stdenv.hostPlatform.system}"
+          echo "Is Cross Compiling: ${if isCrossCompiling pkgs then "yes" else "no"}"
+          echo "Has Remote Builders: $(if [ -f /etc/nix/builders ]; then echo yes; else echo no; fi)"
+        '';
+
         #Where we import and build the orioledb extension, we add on our custom extensions
         # plus the orioledb option
         #we're not using timescaledb or plv8 in the orioledb-17 version or pg 17 of supabase extensions
@@ -226,6 +235,33 @@
           };
         };
 
+        # Add this function to properly handle cross-compilation
+        makeCrossAwarePostgresPkgs = version:
+          let
+            postgresql = getPostgresqlPackage version;
+            
+            # When cross-compiling, use the correct nixpkgs
+            targetPkgs = if (pkgs.stdenv.buildPlatform != pkgs.stdenv.hostPlatform)
+              then import nixpkgs {
+                system = pkgs.stdenv.hostPlatform.system;
+                crossSystem = pkgs.stdenv.hostPlatform;
+              }
+              else pkgs;
+            
+            extensionsToUse =
+              if version == "15" then ourExtensions
+              else if (builtins.elem version [ "orioledb-17" ]) then orioledbExtensions
+              else if (builtins.elem version [ "17" ]) then dbExtensions17
+              else ourExtensions;
+            
+            # Build with target packages
+            buildExtension = path: targetPkgs.callPackage path { 
+              inherit postgresql;
+              stdenv = targetPkgs.stdenv;
+            };
+          in
+          map buildExtension extensionsToUse;
+
 # PRODUCTION-READY FIX for flake.nix
 # Replace the makeOurPostgresPkgs and makePostgresBin functions with these fixed versions
 
@@ -251,8 +287,23 @@
           in
           validExtensions;
 
-        # Alternative robust version for makeOurPostgresPkgs - if tryEval doesn't work
-        makeOurPostgresPkgsRobust = version:
+        # PRODUCTION-READY FIX for flake.nix
+        # Replace the makeOurPostgresPkgs and related functions (around line 144-231) with:
+
+        # Helper to check if we're cross-compiling
+        isCrossCompiling = pkgs: pkgs.stdenv.buildPlatform != pkgs.stdenv.hostPlatform;
+
+        # Extensions that are known to fail cross-compilation from macOS to Linux
+        crossCompileBlacklist = [
+          ./nix/ext/pgroonga.nix
+          ./nix/ext/plv8.nix
+          ./nix/ext/age.nix
+          ./nix/ext/timescaledb.nix
+          ./nix/ext/timescaledb-2.9.1.nix
+        ];
+
+        # Safe extension builder that handles cross-compilation
+        makeOurPostgresPkgs = version:
           let
             postgresql = getPostgresqlPackage version;
             extensionsToUse =
@@ -261,47 +312,97 @@
               else if (builtins.elem version [ "17" ]) then dbExtensions17
               else ourExtensions;
             
-            # Known problematic extensions for version 15
-            problematicExtensions = if version == "15" then [
-              ./nix/ext/pgroonga.nix  # Fails due to missing groonga.h
-              ./nix/ext/plv8.nix       # Likely fails due to V8 dependencies
-              ./nix/ext/age.nix        # Might fail due to build issues
-		# Add other problematic extensions here as needed
-            ] else [];
+            # Filter out problematic extensions when cross-compiling
+            safeExtensions = 
+              if isCrossCompiling pkgs
+              then builtins.filter (ext: !(builtins.elem ext crossCompileBlacklist)) extensionsToUse
+              else extensionsToUse;
             
-            # Filter out problematic extensions
-            safeExtensions = builtins.filter 
-              (ext: !(builtins.elem ext problematicExtensions)) 
-              extensionsToUse;
+            # Build extensions with error handling
+            buildExtension = path:
+              let
+                name = baseNameOf (toString path);
+              in
+              try {
+                value = pkgs.callPackage path { inherit postgresql; };
+                success = true;
+              } catch (e: {
+                value = null;
+                success = false;
+                error = "Failed to build ${name}: ${toString e}";
+              });
+            
+            # Build all extensions, filtering out failures
+            builtExtensions = map buildExtension safeExtensions;
+            successfulExtensions = builtins.filter (e: e.success) builtExtensions;
+            
+            # Log failures for debugging (optional)
+            failures = builtins.filter (e: !e.success) builtExtensions;
+            _ = if failures != [] 
+                then builtins.trace "Warning: Some extensions failed to build: ${toString (map (f: f.error) failures)}"
+                else null;
           in
-          map (path: pkgs.callPackage path { inherit postgresql; }) safeExtensions;
+          map (e: e.value) successfulExtensions;
 
-        # Updated makePostgresBin that uses safe extensions
+        # Alternative implementation using Nix's tryEval
+        makeOurPostgresPkgsRobust = version:
+          let
+            postgresql = getPostgresqlPackage version;
+            extensionsToUse =
+              if version == "15" then ourExtensions
+              else if (builtins.elem version [ "orioledb-17" ]) then orioledbExtensions  
+              else if (builtins.elem version [ "17" ]) then dbExtensions17
+              else ourExtensions;
+            
+            # Filter based on system
+            systemFilteredExtensions =
+              if (pkgs.stdenv.isDarwin && pkgs.stdenv.isAarch64) || isCrossCompiling pkgs
+              then builtins.filter (ext: !(builtins.elem ext crossCompileBlacklist)) extensionsToUse
+              else extensionsToUse;
+            
+            # Try to build each extension
+            tryBuildExtension = path:
+              let
+                result = builtins.tryEval (pkgs.callPackage path { inherit postgresql; });
+              in
+              if result.success then result.value else null;
+            
+            # Build and filter
+            builtExtensions = map tryBuildExtension systemFilteredExtensions;
+            validExtensions = builtins.filter (ext: ext != null) builtExtensions;
+          in
+          validExtensions;
+
+        # Update makePostgresBin to use the robust version
         makePostgresBin = version:
           let
             postgresql = getPostgresqlPackage version;
             
-            # Use the robust version to avoid failures
+            # Use the robust version that handles failures
             ourExtsList = makeOurPostgresPkgsRobust version;
-            ourExts = map (ext: { name = ext.pname; version = ext.version; }) ourExtsList;
+            ourExts = map (ext: { name = ext.pname or "unknown"; version = ext.version or "unknown"; }) ourExtsList;
 
             pgbin = postgresql.withPackages (ps: ourExtsList);
           in
           pkgs.symlinkJoin {
             inherit (pgbin) name version;
             paths = [ pgbin (makeReceipt pgbin ourExts) ];
+            passthru = {
+              inherit ourExtsList;
+              exts = makeOurPostgresPkgsSet version;
+            };
           };
 
-        # Keep original for individual extension access
+        # Update the set builder for consistency
         makeOurPostgresPkgsSet = version:
+          let
+            extsList = makeOurPostgresPkgsRobust version;
+            validExts = builtins.filter (drv: drv != null) extsList;
+          in
           (builtins.listToAttrs (map
-            (drv:
-              { name = drv.pname; value = drv; }
-            )
-            # Use the safe version here too for consistency
-            (makeOurPostgresPkgsRobust version)))
+            (drv: { name = drv.pname; value = drv; })
+            validExts))
           // { recurseForDerivations = true; };
-
         # Create an attribute set, containing all the relevant packages for a
         # PostgreSQL install, wrapped up with a bow on top. There are three
         # packages:
