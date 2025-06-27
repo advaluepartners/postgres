@@ -310,17 +310,62 @@
         executable: /bin/bash
       when: stage2_nix
 
+    # - name: Setup Apache AGE extension
+    #   become: yes
+    #   become_user: postgres
+    #   shell: |
+    #     psql -d postgres -c "CREATE EXTENSION IF NOT EXISTS age;"
+    #     psql -d postgres -c "LOAD 'age';"
+    #     # Only set search_path if ag_catalog schema exists
+    #     psql -d postgres -c "DO \$\$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = 'ag_catalog') THEN EXECUTE 'SET search_path = ag_catalog, \"\$user\", public'; END IF; END \$\$;"
+    #   when: stage2_nix
+    #   register: age_setup
+    #   changed_when: "'CREATE EXTENSION' in age_setup.stdout" 
+
+    # TESTING THIS NEW CODE FROM OPUS 
+
     - name: Setup Apache AGE extension
       become: yes
       become_user: postgres
       shell: |
-        psql -d postgres -c "CREATE EXTENSION IF NOT EXISTS age;"
-        psql -d postgres -c "LOAD 'age';"
-        # Only set search_path if ag_catalog schema exists
-        psql -d postgres -c "DO \$\$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = 'ag_catalog') THEN EXECUTE 'SET search_path = ag_catalog, \"\$user\", public'; END IF; END \$\$;"
-      when: stage2_nix
+        # Wait for PostgreSQL to be fully ready
+        for i in {1..30}; do
+          if psql -d postgres -c "SELECT 1;" > /dev/null 2>&1; then
+            break
+          fi
+          sleep 1
+        done
+        
+        # Create AGE extension with error handling
+        psql -d postgres -c "CREATE EXTENSION IF NOT EXISTS age CASCADE;" || {
+          echo "Failed to create AGE extension, checking dependencies..."
+          psql -d postgres -c "\dx"
+          exit 1
+        }
+        
+        # Load AGE
+        psql -d postgres -c "LOAD 'age';" || {
+          echo "Failed to load AGE extension"
+          exit 1
+        }
+        
+        # Set search path only if ag_catalog exists
+        psql -d postgres -c "DO \$\$ 
+        BEGIN 
+          IF EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'ag_catalog') THEN 
+            EXECUTE 'SET search_path = ag_catalog, \"\$user\", public'; 
+            RAISE NOTICE 'AGE extension successfully configured';
+          ELSE
+            RAISE WARNING 'ag_catalog schema not found - AGE may not be properly installed';
+          END IF; 
+        END \$\$;"
+        
+        # Verify AGE installation
+        psql -d postgres -c "SELECT extname, extversion FROM pg_extension WHERE extname = 'age';"
+      when: stage2_nix and postgresql_major_version == "15"
       register: age_setup
-      changed_when: "'CREATE EXTENSION' in age_setup.stdout" 
+      changed_when: "'CREATE EXTENSION' in age_setup.stdout"
+      failed_when: age_setup.rc != 0
     
     # Be careful, if already created, this won't show.
     # Maybe check for 'LOAD' or 'SET' in stdout too, or ignore changed_when for this.

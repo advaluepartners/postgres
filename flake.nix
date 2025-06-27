@@ -167,6 +167,9 @@
           ./nix/ext/pg_backtrace.nix 
         ];
 
+        # Helper to check if we're cross-compiling
+          isCrossCompiling = pkgs: pkgs.stdenv.buildPlatform != pkgs.stdenv.hostPlatform;
+
         # Add a helper to check build environment
         checkBuildEnvironment = pkgs.writeScriptBin "check-build-env" ''
           #!${pkgs.stdenv.shell}
@@ -265,84 +268,41 @@
 # PRODUCTION-READY FIX for flake.nix
 # Replace the makeOurPostgresPkgs and makePostgresBin functions with these fixed versions
 
-        # Fixed version that filters out broken extensions
-        makeOurPostgresPkgs = version:
-          let
-            postgresql = getPostgresqlPackage version;
-            extensionsToUse =
-              if version == "15" then ourExtensions
-              else if (builtins.elem version [ "orioledb-17" ]) then orioledbExtensions
-              else if (builtins.elem version [ "17" ]) then dbExtensions17
-              else ourExtensions;
-            
-            # Helper function to safely try building an extension
-            tryExtension = path:
-              let
-                result = builtins.tryEval (pkgs.callPackage path { inherit postgresql; });
-              in
-              if result.success then [ result.value ] else [];
-            
-            # Build extensions, filtering out failures
-            validExtensions = pkgs.lib.flatten (map tryExtension extensionsToUse);
-          in
-          validExtensions;
-
-        # PRODUCTION-READY FIX for flake.nix
-        # Replace the makeOurPostgresPkgs and related functions (around line 144-231) with:
-
-        # Helper to check if we're cross-compiling
-        isCrossCompiling = pkgs: pkgs.stdenv.buildPlatform != pkgs.stdenv.hostPlatform;
-
-        # Extensions that are known to fail cross-compilation from macOS to Linux
-        crossCompileBlacklist = [
-          ./nix/ext/pgroonga.nix
-          ./nix/ext/plv8.nix
-          ./nix/ext/age.nix
-          ./nix/ext/timescaledb.nix
-          ./nix/ext/timescaledb-2.9.1.nix
-        ];
-
-        # Safe extension builder that handles cross-compilation
-        makeOurPostgresPkgs = version:
-          let
-            postgresql = getPostgresqlPackage version;
-            extensionsToUse =
-              if version == "15" then ourExtensions
-              else if (builtins.elem version [ "orioledb-17" ]) then orioledbExtensions
-              else if (builtins.elem version [ "17" ]) then dbExtensions17
-              else ourExtensions;
-            
-            # Filter out problematic extensions when cross-compiling
-            safeExtensions = 
-              if isCrossCompiling pkgs
-              then builtins.filter (ext: !(builtins.elem ext crossCompileBlacklist)) extensionsToUse
-              else extensionsToUse;
-            
-            # Build extensions with error handling
-            buildExtension = path:
-              let
-                name = baseNameOf (toString path);
-              in
-              try {
-                value = pkgs.callPackage path { inherit postgresql; };
-                success = true;
-              } catch (e: {
-                value = null;
-                success = false;
-                error = "Failed to build ${name}: ${toString e}";
-              });
-            
-            # Build all extensions, filtering out failures
-            builtExtensions = map buildExtension safeExtensions;
-            successfulExtensions = builtins.filter (e: e.success) builtExtensions;
-            
-            # Log failures for debugging (optional)
-            failures = builtins.filter (e: !e.success) builtExtensions;
-            _ = if failures != [] 
-                then builtins.trace "Warning: Some extensions failed to build: ${toString (map (f: f.error) failures)}"
-                else null;
-          in
-          map (e: e.value) successfulExtensions;
+      # Fixed version that filters out broken extensions
+      makeOurPostgresPkgs = version:
+        let
+          postgresql = getPostgresqlPackage version;
+          extensionsToUse =
+            if version == "15" then ourExtensions  # AGE will be included for PG15
+            else if (builtins.elem version [ "orioledb-17" ]) then orioledbExtensions
+            else if (builtins.elem version [ "17" ]) then dbExtensions17
+            else ourExtensions;
+          
+          # For ARM64 builds, filter more carefully
+          safeExtensions = 
+            if isCrossCompiling pkgs
+            then 
+              if version == "15"
+              then builtins.filter (ext: 
+                # Keep AGE for PostgreSQL 15 even on ARM64
+                ext == ./nix/ext/age.nix || 
+                !(builtins.elem ext crossCompileBlacklist)
+              ) extensionsToUse
+              else builtins.filter (ext: !(builtins.elem ext crossCompileBlacklist)) extensionsToUse
+            else extensionsToUse;
+          
+          # Build extensions with error handling
+          buildExtension = path:
+            let
+              name = baseNameOf (toString path);
+            in
+            builtins.tryEval (pkgs.callPackage path { inherit postgresql; });
+          
+          # Build all extensions, filtering out failures
+          builtExtensions = map buildExtension safeExtensions;
+          successfulExtensions = builtins.filter (e: e.success) builtExtensions;
+        in
+        map (e: e.value) successfulExtensions;
 
         # Alternative implementation using Nix's tryEval
         makeOurPostgresPkgsRobust = version:

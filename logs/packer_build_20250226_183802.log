@@ -969,14 +969,16 @@
 2025/02/26 18:38:49 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/02/26 18:38:49 [DEBUG] Starting remote scp process:  scp -vt /tmp/ansible-playbook
 2025/02/26 18:38:50 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/02/26 18:38:50 [DEBUG] Started SCP session, beginning transfers...
 2025/02/26 18:38:50 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/02/26 18:38:50 [DEBUG] scp: Uploading flake.nix: perms=C0644 size=38292
-[0;32m    nix-packer-ubuntu.amazon-ebs.ubuntu: flake.nix[0m 37.39 KiB / 37.39 KiB [======================================================] 100.00%
+
+[0;32m    nix-packer-ubuntu.amazon-ebs.ubuntu: flake.nix[0m 37.39 KiB / 37.39 KiB [======================================================] 100.00%
 2025/02/26 18:38:50 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/02/26 18:38:50 [DEBUG] SCP session complete, closing stdin pipe.
 2025/02/26 18:38:50 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/02/26 18:38:50 [DEBUG] Waiting for SSH session to complete.
 2025/02/26 18:38:50 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/02/26 18:38:50 [DEBUG] scp stderr (length 28): Sink: C0644 38292 flake.nix
 2025/02/26 18:38:50 packer-provisioner-file plugin: closing
 2025/02/26 18:38:50 closing
 2025/02/26 18:38:50 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/02/26 18:38:50 closing
-[1A[0;32m    nix-packer-ubuntu.amazon-ebs.ubuntu: flake.nix[0m 37.39 KiB / 37.39 KiB [===================================================] 100.00% 0s
+[1A
+[0;32m    nix-packer-ubuntu.amazon-ebs.ubuntu: flake.nix[0m 37.39 KiB / 37.39 KiB [===================================================] 100.00% 0s
 2025/02/26 18:38:50 [INFO] (telemetry) ending file
 2025/02/26 18:38:50 [INFO] (telemetry) Starting provisioner file
 2025/02/26 18:38:50 packer-provisioner-file plugin: [DEBUG] - common: sending ConfigSpec as gob
@@ -988,14 +990,16 @@
 2025/02/26 18:38:50 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/02/26 18:38:50 [DEBUG] Starting remote scp process:  scp -vt /tmp/ansible-playbook
 2025/02/26 18:38:50 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/02/26 18:38:50 [DEBUG] Started SCP session, beginning transfers...
 2025/02/26 18:38:50 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/02/26 18:38:50 [DEBUG] scp: Uploading flake.lock: perms=C0644 size=5725
-[0;32m    nix-packer-ubuntu.amazon-ebs.ubuntu: flake.lock[0m 5.59 KiB / 5.59 KiB [=======================================================] 100.00%
+
+[0;32m    nix-packer-ubuntu.amazon-ebs.ubuntu: flake.lock[0m 5.59 KiB / 5.59 KiB [=======================================================] 100.00%
 2025/02/26 18:38:50 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/02/26 18:38:50 [DEBUG] SCP session complete, closing stdin pipe.
 2025/02/26 18:38:50 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/02/26 18:38:50 [DEBUG] Waiting for SSH session to complete.
 2025/02/26 18:38:50 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/02/26 18:38:50 [DEBUG] scp stderr (length 28): Sink: C0644 5725 flake.lock
 2025/02/26 18:38:50 packer-provisioner-file plugin: closing
 2025/02/26 18:38:50 closing
 2025/02/26 18:38:50 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/02/26 18:38:50 closing
-[1A[0;32m    nix-packer-ubuntu.amazon-ebs.ubuntu: flake.lock[0m 5.59 KiB / 5.59 KiB [====================================================] 100.00% 0s
+[1A
+[0;32m    nix-packer-ubuntu.amazon-ebs.ubuntu: flake.lock[0m 5.59 KiB / 5.59 KiB [====================================================] 100.00% 0s
 2025/02/26 18:38:50 [INFO] (telemetry) ending file
 2025/02/26 18:38:50 [INFO] (telemetry) Starting provisioner file
 2025/02/26 18:38:50 packer-provisioner-file plugin: [DEBUG] - common: sending ConfigSpec as gob
