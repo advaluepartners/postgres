@@ -96,15 +96,6 @@ source "amazon-ebs" "ubuntu" {
     volume_size           = 40  # Increased from default 8GB to 40GB
     delete_on_termination = true
   }
-
-  # Optional: Add temporary build volume (gets deleted after AMI creation)
-  launch_block_device_mappings {
-    device_name           = "/dev/sdf"
-    volume_type           = "gp3" 
-    volume_size           = 20  # Additional 20GB for build artifacts
-    delete_on_termination = true
-    omit_from_artifact    = true  # Don't include in final AMI
-  }
   
   run_tags = {
     creator           = "packer"

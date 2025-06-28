@@ -7,6 +7,7 @@ export CURRENT_GIT_SHA=$(git rev-parse HEAD)
 export POSTGRES_MAJOR_TO_BUILD="15"
 export PACKER_RUN_ID=$(date +%s)
 export TIMESTAMP_S2=$(date +%Y%m%d_%H%M%S)
+export AWS_PROFILE="capitala"
 
 echo "Building with the following variables:"
 echo "TARGET_REGION: ${TARGET_REGION}"
