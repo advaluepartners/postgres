@@ -93,7 +93,7 @@
   become: yes
   shell: |
     chown -R postgres:postgres /var/lib/postgresql
-    sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile install --accept-flake-config /tmp/ansible-playbook#{{ psql_version }}.bin"
+    sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile install --accept-flake-config /tmp/ansible-playbook#{{ psql_version }}/bin"
   when: stage2_nix
   register: install_postgres
   retries: 3
