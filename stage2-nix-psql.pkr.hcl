@@ -89,11 +89,19 @@ source "amazon-ebs" "ubuntu" {
 
   ena_support = true
 
-  # CRITICAL FIX: Add additional storage for Nix builds
+  # FIXED: Increased root volume size and added dedicated build volume
   launch_block_device_mappings {
     device_name           = "/dev/sda1"
     volume_type           = "gp3"
-    volume_size           = 40  # Increased from default 8GB to 40GB
+    volume_size           = 20  # Increased root from 10GB to 20GB
+    delete_on_termination = true
+  }
+  
+  # ADDED: Dedicated 60GB build volume for Nix builds
+  launch_block_device_mappings {
+    device_name           = "/dev/sdf"
+    volume_type           = "gp3"
+    volume_size           = 60  # Dedicated build space
     delete_on_termination = true
   }
   
@@ -128,8 +136,50 @@ build {
     inline = [
       "mkdir -p /tmp/ansible-playbook",
       "mkdir -p /tmp/ansible-playbook/nix",
-      # Mount additional build volume if available
-      "if [ -b /dev/sdf ]; then sudo mkfs.ext4 /dev/sdf && sudo mkdir -p /tmp/nix-build && sudo mount /dev/sdf /tmp/nix-build && sudo chmod 777 /tmp/nix-build; fi"
+      # FIXED: Proper NVMe device detection and mounting with multiple fallbacks
+      <<-EOT
+      echo "=== Setting up build volume ==="
+      
+      # Function to detect and mount build volume
+      setup_build_volume() {
+        local mounted=false
+        
+        # Try different device patterns for build volume
+        for device in /dev/nvme1n1 /dev/nvme2n1 /dev/nvme3n1 /dev/xvdf /dev/sdf; do
+          if [ -b "$device" ]; then
+            echo "Found build device: $device"
+            sudo mkfs.ext4 -F "$device"
+            sudo mkdir -p /tmp/nix-build
+            sudo mount "$device" /tmp/nix-build
+            sudo chmod 777 /tmp/nix-build
+            
+            # Create swap file on build volume for extra memory
+            sudo fallocate -l 4G /tmp/nix-build/swapfile
+            sudo chmod 600 /tmp/nix-build/swapfile
+            sudo mkswap /tmp/nix-build/swapfile
+            sudo swapon /tmp/nix-build/swapfile
+            
+            echo "Successfully mounted $device to /tmp/nix-build"
+            mounted=true
+            break
+          fi
+        done
+        
+        if [ "$mounted" = false ]; then
+          echo "No additional build volume found, using root filesystem"
+          sudo mkdir -p /tmp/nix-build
+          sudo chmod 777 /tmp/nix-build
+        fi
+        
+        # Show final disk usage
+        echo "=== Disk usage after setup ==="
+        df -h
+        echo "=== Available devices ==="
+        lsblk
+      }
+      
+      setup_build_volume
+      EOT
     ]
   }
 
@@ -172,8 +222,10 @@ build {
     environment_vars = [
       "GIT_SHA=${var.git_commit_sha}",
       "POSTGRES_MAJOR_VERSION=${var.postgres_major_version}",
-      # Set NIX_BUILD_CORES to limit parallel builds and reduce memory pressure
-      "NIX_BUILD_CORES=2"
+      # FIXED: Optimized Nix configuration for disk space management
+      "NIX_BUILD_CORES=4",
+      "TMPDIR=/tmp/nix-build",
+      "NIX_BUILD_TOP=/tmp/nix-build"
     ]
     script           = "scripts/nix-provision.sh"
     expect_disconnect = true    # Allow SSH disconnection

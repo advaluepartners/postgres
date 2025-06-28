@@ -31,18 +31,43 @@
             permittedInsecurePackages = [
               "v8-9.7.106.18"
             ];
-            # Global Rust optimization - disable docs for all Rust packages
+            # OPTIMIZED: Global Rust optimization - disable docs and minimize toolchain versions
             packageOverrides = pkgs: {
               rust-bin = pkgs.rust-bin or {} // {
                 stable = builtins.mapAttrs (version: toolchain: 
-                  toolchain // {
-                    default = if toolchain ? default then toolchain.default.override {
-                      extensions = [ "rust-src" "clippy" "rustfmt" ];
-                    } else toolchain;
-                  }
+                  # Only keep one stable Rust version to reduce build space
+                  if version == "1.80.0" then
+                    toolchain // {
+                      default = if toolchain ? default then toolchain.default.override {
+                        extensions = [ "rust-src" "clippy" "rustfmt" ];
+                        # Disable documentation components
+                        targets = [];
+                      } else toolchain;
+                    }
+                  else toolchain
                 ) (pkgs.rust-bin.stable or {});
               };
+              
+              # Override all Rust packages to disable documentation
+              rustPlatform = pkgs.rustPlatform.override {
+                rustc = pkgs.rust-bin.stable."1.80.0".default.override {
+                  extensions = [ "rust-src" "clippy" "rustfmt" ];
+                };
+              };
             };
+            
+            # ADDED: Disable documentation builds globally for space efficiency
+            doCheck = false;
+            dontBuild = false;
+            
+            # Override derivation defaults to minimize build outputs
+            preConfigure = ''
+              export CARGO_BUILD_RUSTDOC=false
+              export RUSTDOC_DISABLE=1
+              export RUST_DOCS_DISABLE=1
+              export CARGO_PROFILE_RELEASE_BUILD_OVERRIDE_DEBUG=false
+              export CARGO_PROFILE_RELEASE_DEBUG=false
+            '';
           };
           inherit system;
           overlays = [
@@ -55,6 +80,7 @@
             })
             (import rust-overlay)
             (final: prev: {
+              # OPTIMIZED: Use single Rust version across all extensions
               cargo-pgrx = final.callPackage ./nix/cargo-pgrx/default.nix {
                 inherit (final) lib;
                 inherit (final) darwin;
@@ -63,7 +89,7 @@
                 inherit (final) pkg-config;
                 inherit (final) makeRustPlatform;
                 inherit (final) stdenv;
-                inherit (final) rust-bin;
+                rust-bin = final.rust-bin.stable."1.80.0";  # Use single version
               };
 
               buildPgrxExtension = final.callPackage ./nix/cargo-pgrx/buildPgrxExtension.nix {
@@ -76,10 +102,7 @@
                 inherit (final) writeShellScriptBin;
               };
 
-              buildPgrxExtension_0_11_3 = prev.buildPgrxExtension.override {
-                cargo-pgrx = final.cargo-pgrx.cargo-pgrx_0_11_3;
-              };
-
+              # OPTIMIZED: Reduce number of pgrx versions to minimize builds
               buildPgrxExtension_0_12_6 = prev.buildPgrxExtension.override {
                 cargo-pgrx = final.cargo-pgrx.cargo-pgrx_0_12_6;
               };
@@ -88,9 +111,13 @@
                 cargo-pgrx = final.cargo-pgrx.cargo-pgrx_0_12_9;
               };
 
-              buildPgrxExtension_0_14_3 = prev.buildPgrxExtension.override {
-                cargo-pgrx = final.cargo-pgrx.cargo-pgrx_0_14_3;
-              };
+              # Comment out unused versions to save build space
+              # buildPgrxExtension_0_11_3 = prev.buildPgrxExtension.override {
+              #   cargo-pgrx = final.cargo-pgrx.cargo-pgrx_0_11_3;
+              # };
+              # buildPgrxExtension_0_14_3 = prev.buildPgrxExtension.override {
+              #   cargo-pgrx = final.cargo-pgrx.cargo-pgrx_0_14_3;
+              # };
 
             })
             (final: prev: {

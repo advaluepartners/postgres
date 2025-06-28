@@ -4,6 +4,7 @@
 venv/
 *.swp
 docker/cache/
+.log
 
 ansible/image-manifest*.json
 testinfra-aio-container-logs.log
