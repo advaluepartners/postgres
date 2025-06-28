@@ -273,10 +273,7 @@
           in
           map buildExtension extensionsToUse;
 
-# PRODUCTION-READY FIX for flake.nix
-# Replace the makeOurPostgresPkgs and makePostgresBin functions with these fixed versions
-
-      # Fixed version that filters out broken extensions
+# Fixed version of makeOurPostgresPkgs function (around line 190-220)
       makeOurPostgresPkgs = version:
         let
           postgresql = getPostgresqlPackage version;
@@ -286,9 +283,9 @@
             else if (builtins.elem version [ "17" ]) then dbExtensions17
             else ourExtensions;
           
-          # For ARM64 builds, filter more carefully
+          # For ARM64 builds (both native and cross-compilation), filter more carefully
           safeExtensions = 
-            if isCrossCompiling pkgs
+            if pkgs.stdenv.isAarch64 || isCrossCompiling pkgs
             then 
               if version == "15"
               then builtins.filter (ext: 
@@ -312,7 +309,7 @@
         in
         map (e: e.value) successfulExtensions;
 
-        # Alternative implementation using Nix's tryEval
+        # Alternative implementation using Nix's tryEval (around line 230-270)
         makeOurPostgresPkgsRobust = version:
           let
             postgresql = getPostgresqlPackage version;
@@ -322,9 +319,9 @@
               else if (builtins.elem version [ "17" ]) then dbExtensions17
               else ourExtensions;
             
-            # Filter based on system
+            # Filter based on system - now includes native ARM64 builds
             systemFilteredExtensions =
-              if (pkgs.stdenv.isDarwin && pkgs.stdenv.isAarch64) || isCrossCompiling pkgs
+              if pkgs.stdenv.isAarch64 || isCrossCompiling pkgs
               then builtins.filter (ext: !(builtins.elem ext crossCompileBlacklist)) extensionsToUse
               else extensionsToUse;
             
