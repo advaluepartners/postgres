@@ -88,6 +88,23 @@ source "amazon-ebs" "ubuntu" {
   associate_public_ip_address = true
 
   ena_support = true
+
+  # CRITICAL FIX: Add additional storage for Nix builds
+  launch_block_device_mappings {
+    device_name           = "/dev/sda1"
+    volume_type           = "gp3"
+    volume_size           = 40  # Increased from default 8GB to 40GB
+    delete_on_termination = true
+  }
+
+  # Optional: Add temporary build volume (gets deleted after AMI creation)
+  launch_block_device_mappings {
+    device_name           = "/dev/sdf"
+    volume_type           = "gp3" 
+    volume_size           = 20  # Additional 20GB for build artifacts
+    delete_on_termination = true
+    omit_from_artifact    = true  # Don't include in final AMI
+  }
   
   run_tags = {
     creator           = "packer"
@@ -116,11 +133,12 @@ build {
     "source.amazon-ebs.ubuntu"
   ]
 
-
  provisioner "shell" {
     inline = [
       "mkdir -p /tmp/ansible-playbook",
-      "mkdir -p /tmp/ansible-playbook/nix"
+      "mkdir -p /tmp/ansible-playbook/nix",
+      # Mount additional build volume if available
+      "if [ -b /dev/sdf ]; then sudo mkfs.ext4 /dev/sdf && sudo mkdir -p /tmp/nix-build && sudo mount /dev/sdf /tmp/nix-build && sudo chmod 777 /tmp/nix-build; fi"
     ]
   }
 
@@ -162,7 +180,9 @@ build {
   provisioner "shell" {
     environment_vars = [
       "GIT_SHA=${var.git_commit_sha}",
-      "POSTGRES_MAJOR_VERSION=${var.postgres_major_version}"
+      "POSTGRES_MAJOR_VERSION=${var.postgres_major_version}",
+      # Set NIX_BUILD_CORES to limit parallel builds and reduce memory pressure
+      "NIX_BUILD_CORES=2"
     ]
     script           = "scripts/nix-provision.sh"
     expect_disconnect = true    # Allow SSH disconnection

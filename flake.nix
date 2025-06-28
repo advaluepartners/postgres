@@ -31,6 +31,18 @@
             permittedInsecurePackages = [
               "v8-9.7.106.18"
             ];
+            # Global Rust optimization - disable docs for all Rust packages
+            packageOverrides = pkgs: {
+              rust-bin = pkgs.rust-bin or {} // {
+                stable = builtins.mapAttrs (version: toolchain: 
+                  toolchain // {
+                    default = if toolchain ? default then toolchain.default.override {
+                      extensions = [ "rust-src" "clippy" "rustfmt" ];
+                    } else toolchain;
+                  }
+                ) (pkgs.rust-bin.stable or {});
+              };
+            };
           };
           inherit system;
           overlays = [
