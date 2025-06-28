@@ -19,7 +19,39 @@ function setup_nix_store_on_build_volume() {
     for device in /dev/nvme1n1 /dev/nvme2n1 /dev/nvme3n1 /dev/xvdf /dev/sdf; do
         if [ -b "$device" ]; then
             echo "Found build device: $device"
-            sudo mkfs.ext4 -F "$device"
+            
+            # Aggressive unmounting with retries
+            echo "Unmounting $device..."
+            for i in {1..5}; do
+                sudo umount "$device" 2>/dev/null || true
+                sudo umount /tmp/nix-build 2>/dev/null || true
+                sleep 1
+                if ! mount | grep -q "$device"; then
+                    echo "Device unmounted successfully"
+                    break
+                fi
+                echo "Retry $i: Still mounted, trying again..."
+            done
+            
+            # Force kill any processes using the mount point
+            sudo fuser -km /tmp/nix-build 2>/dev/null || true
+            sudo fuser -km "$device" 2>/dev/null || true
+            
+            # Final unmount attempt
+            sudo umount -l "$device" 2>/dev/null || true  # lazy unmount
+            sudo umount -f "$device" 2>/dev/null || true  # force unmount
+            
+            # Clear filesystem signatures to ensure clean format
+            sudo wipefs -a "$device" 2>/dev/null || true
+            
+            # Wait a moment for kernel to update
+            sleep 2
+            
+            # Format with force flag and no interaction
+            echo "Formatting $device..."
+            sudo mkfs.ext4 -F -q "$device"
+            
+            # Mount and setup
             sudo mkdir -p /tmp/nix-build
             sudo mount "$device" /tmp/nix-build
             sudo chmod 777 /tmp/nix-build
