@@ -134,10 +134,71 @@ build {
 
   provisioner "shell" {
   inline = [
-        "mkdir -p /tmp/ansible-playbook",
-        "mkdir -p /tmp/ansible-playbook/nix"
-      ]
-    }
+    "echo '=== Diagnostic: All block devices ==='",
+    "lsblk -b -o NAME,SIZE,TYPE,MOUNTPOINT",
+    "echo '=== Diagnostic: NVMe devices ==='",
+    "ls -la /dev/nvme*",
+    "echo '=== Diagnostic: Current mounts ==='",
+    "mount | grep -E '(ext4|xfs|btrfs)'",
+    "echo '=== Diagnostic: Disk usage ==='",
+    "df -h",
+    "echo '=== Diagnostic: Find large volumes ==='",
+    "for dev in /dev/nvme*n1; do",
+    "  if [ -b \"$dev\" ]; then",
+    "    size_gb=$(lsblk -b -n -o SIZE \"$dev\" 2>/dev/null | awk '{print int($1/1024/1024/1024)}')",
+    "    echo \"Device $dev is $${size_gb}GB\"",
+    "  fi",
+    "done"
+  ]
+}
+
+  provisioner "shell" {
+    inline = [
+      "mkdir -p /tmp/ansible-playbook",
+      "mkdir -p /tmp/ansible-playbook/nix",
+      <<-EOT
+      echo "=== Setting up 60GB build volume for Nix ==="
+      
+      # The 60GB volume is nvme2n1
+      DEVICE="/dev/nvme2n1"
+      
+      if [ -b "$DEVICE" ]; then
+        echo "Found 60GB build volume at $DEVICE"
+        
+        # Check if already mounted
+        if mount | grep -q "$DEVICE"; then
+          echo "Device $DEVICE is already mounted"
+        else
+          echo "Formatting and mounting $DEVICE"
+          sudo mkfs.ext4 -F "$DEVICE" || { echo "Failed to format"; exit 1; }
+          
+          # Create mount point
+          sudo mkdir -p /nix/var/nix/tmp
+          sudo mount "$DEVICE" /nix/var/nix/tmp
+          sudo chmod 1777 /nix/var/nix/tmp
+          
+          # Create subdirectory for builds
+          sudo mkdir -p /nix/var/nix/tmp/build
+          sudo chmod 1777 /nix/var/nix/tmp/build
+          
+          # Set up environment variables
+          echo 'export TMPDIR=/nix/var/nix/tmp/build' | sudo tee -a /etc/environment
+          echo 'export NIX_BUILD_TOP=/nix/var/nix/tmp/build' | sudo tee -a /etc/environment
+          
+          echo "Successfully mounted 60GB volume to /nix/var/nix/tmp"
+        fi
+      else
+        echo "ERROR: 60GB volume not found at $DEVICE!"
+        exit 1
+      fi
+      
+      echo "=== Final disk usage ==="
+      df -h
+      echo "=== Mount details ==="
+      mount | grep nvme
+      EOT
+    ]
+  }
 
   provisioner "file" {
     source = "ansible"

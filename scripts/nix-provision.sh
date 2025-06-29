@@ -20,26 +20,17 @@ function install_packages {
     ansible-galaxy collection install community.general
 }
 
-function setup_build_directories() {
-    echo "=== Setting up build directories for Nix ==="
-    
-    # Create build directories on the root filesystem
-    # We have 20GB on root which should be sufficient with proper cleanup
-    sudo mkdir -p /var/tmp/nix-build
-    sudo chmod 1777 /var/tmp/nix-build
-    
-    # Show current disk usage
-    echo "=== Current disk usage ==="
-    df -h
-}
-
 function install_nix() {
-    # Setup build directories first
-    setup_build_directories
-    
-    # Configure Nix to use our build directory and enable garbage collection
-    export TMPDIR=/var/tmp/nix-build
-    export NIX_BUILD_TOP=/var/tmp/nix-build
+    # The 60GB volume should already be mounted at /nix/var/nix/tmp by Packer
+    if [ -d "/nix/var/nix/tmp/build" ]; then
+        export TMPDIR=/nix/var/nix/tmp/build
+        export NIX_BUILD_TOP=/nix/var/nix/tmp/build
+        echo "Using 60GB build volume at $TMPDIR"
+        df -h /nix/var/nix/tmp
+    else
+        echo "ERROR: Build volume not found at /nix/var/nix/tmp"
+        exit 1
+    fi
     
     sudo su -c "curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install --no-confirm \
     --extra-conf \"substituters = https://cache.nixos.org https://nix-postgres-artifacts.s3.amazonaws.com\" \
@@ -48,7 +39,8 @@ function install_nix() {
     --extra-conf \"cores = 4\" \
     --extra-conf \"keep-outputs = false\" \
     --extra-conf \"keep-derivations = false\" \
-    --extra-conf \"auto-optimise-store = true\"" -s /bin/bash root
+    --extra-conf \"auto-optimise-store = true\" \
+    --extra-conf \"build-dir = /nix/var/nix/tmp/build\"" -s /bin/bash root
     
     . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
 }
@@ -57,9 +49,9 @@ function execute_stage2_playbook {
     echo "POSTGRES_MAJOR_VERSION: ${POSTGRES_MAJOR_VERSION}"
     echo "GIT_SHA: ${GIT_SHA}"
     
-    # Ensure build directories are still available
-    export TMPDIR=/var/tmp/nix-build
-    export NIX_BUILD_TOP=/var/tmp/nix-build
+    # Ensure build volume environment variables are set
+    export TMPDIR=/nix/var/nix/tmp/build
+    export NIX_BUILD_TOP=/nix/var/nix/tmp/build
     
     sudo tee /etc/ansible/ansible.cfg <<EOF
 [defaults]
@@ -83,7 +75,7 @@ function cleanup_packages {
     # Clean up Nix build artifacts before removing ansible
     echo "=== Cleaning up Nix build artifacts ==="
     nix-collect-garbage -d || true
-    rm -rf /var/tmp/nix-build/* || true
+    rm -rf /nix/var/nix/tmp/build/* || true
     
     # Show final disk usage
     echo "=== Final disk usage ==="
@@ -93,8 +85,19 @@ function cleanup_packages {
     sudo add-apt-repository --yes --remove ppa:ansible/ansible
 }
 
+# Add disk usage monitoring function
+function monitor_disk_usage {
+    echo "=== Disk usage check ==="
+    df -h /nix/var/nix/tmp || echo "Build volume not mounted"
+    df -h /
+    echo "=== Nix store size ==="
+    du -sh /nix/store 2>/dev/null || echo "Nix store not accessible"
+}
+
 install_packages
 install_nix
+monitor_disk_usage
 execute_stage2_playbook
+monitor_disk_usage
 cleanup_packages
 
