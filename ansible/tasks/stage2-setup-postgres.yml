@@ -117,6 +117,19 @@
   until: install_postgres.rc == 0
 
 
+# Geminis fix 
+# - name: Install Postgres from local flake
+#   become: yes
+#   shell: |
+#     chown -R postgres:postgres /var/lib/postgresql
+#     sudo -u postgres bash -c "export TMPDIR=/nix/var/nix/tmp/build; export NIX_BUILD_TOP=/nix/var/nix/tmp/build; . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix --extra-experimental-features 'nix-command flakes' profile install --accept-flake-config /tmp/ansible-playbook#{{ psql_version }}/bin"
+#   when: stage2_nix
+#   register: install_postgres
+#   retries: 3
+#   delay: 5
+#   until: install_postgres.rc == 0
+
+
 - name: Debug Nix profile contents
   become: yes
   shell: |

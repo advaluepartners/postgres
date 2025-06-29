@@ -257,8 +257,9 @@ build {
     environment_vars = [
       "GIT_SHA=${var.git_commit_sha}",
       "POSTGRES_MAJOR_VERSION=${var.postgres_major_version}",
-      # Optimized Nix configuration for disk space management
       "NIX_BUILD_CORES=4",
+      "TMPDIR=/tmp/nix-build",
+      "NIX_BUILD_TOP=/tmp/nix-build",
       "_NIX_FORCE_HTTP_BINARY_CACHE_UPDATE=1" 
     ]
     script           = "scripts/nix-provision.sh"

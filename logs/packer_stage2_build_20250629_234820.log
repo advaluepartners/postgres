@@ -1,0 +1,519 @@
+2025/06/29 23:48:20 [INFO] Packer version: 1.12.0 [go1.22.9 darwin arm64]
+2025/06/29 23:48:20 [INFO] PACKER_CONFIG env var not set; checking the default config file path
+2025/06/29 23:48:20 [INFO] PACKER_CONFIG env var set; attempting to open config file: /Users/barneycook/.packerconfig
+2025/06/29 23:48:20 [WARN] Config file doesn't exist: /Users/barneycook/.packerconfig
+2025/06/29 23:48:20 [INFO] Setting cache directory: /Users/barneycook/.cache/packer
+2025/06/29 23:48:20 [TRACE] listing potential installations for "github.com/hashicorp/amazon" that match ">= 0.0.2". plugingetter.ListInstallationsOptions{PluginDirectory:"/Users/barneycook/.config/packer/plugins", BinaryInstallationOptions:plugingetter.BinaryInstallationOptions{APIVersionMajor:"5", APIVersionMinor:"0", OS:"darwin", ARCH:"arm64", Ext:"", Checksummers:[]plugingetter.Checksummer{plugingetter.Checksummer{Type:"sha256", Hash:(*sha256.digest)(0x1400004a080)}}, ReleasesOnly:false}}
+2025/06/29 23:48:20 [TRACE] Found the following "github.com/hashicorp/amazon" installations: [{/Users/barneycook/.config/packer/plugins/github.com/hashicorp/amazon/packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 v1.3.4 x5.0}]
+2025/06/29 23:48:20 [INFO] found external [chroot ebs ebssurrogate ebsvolume instance] builders from amazon plugin
+2025/06/29 23:48:20 [INFO] found external [import] post-processors from amazon plugin
+2025/06/29 23:48:20 found external [ami parameterstore secretsmanager] datasource from amazon plugin
+2025/06/29 23:48:20 plugin "/Users/barneycook/.config/packer/plugins/github.com/hashicorp/amazon/packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64" does not support Protobuf, forcing use of Gob
+2025/06/29 23:48:20 [TRACE] listing potential installations for <nil> that match "". plugingetter.ListInstallationsOptions{PluginDirectory:"/Users/barneycook/.config/packer/plugins", BinaryInstallationOptions:plugingetter.BinaryInstallationOptions{APIVersionMajor:"5", APIVersionMinor:"0", OS:"darwin", ARCH:"arm64", Ext:"", Checksummers:[]plugingetter.Checksummer{plugingetter.Checksummer{Type:"sha256", Hash:(*sha256.digest)(0x14000162c80)}}, ReleasesOnly:false}}
+2025/06/29 23:48:20 [INFO] found external [chroot ebs ebssurrogate ebsvolume instance] builders from amazon plugin
+2025/06/29 23:48:20 [INFO] found external [import] post-processors from amazon plugin
+2025/06/29 23:48:20 found external [ami parameterstore secretsmanager] datasource from amazon plugin
+2025/06/29 23:48:20 [TRACE] validateValue: not active for git_sha, so skipping
+2025/06/29 23:48:20 [TRACE] validateValue: not active for environment, so skipping
+2025/06/29 23:48:20 [TRACE] validateValue: not active for postgres-version, so skipping
+2025/06/29 23:48:20 [TRACE] validateValue: not active for git_commit_sha, so skipping
+2025/06/29 23:48:20 [TRACE] validateValue: not active for packer-execution-id, so skipping
+2025/06/29 23:48:20 [TRACE] validateValue: not active for git-head-version, so skipping
+2025/06/29 23:48:20 [TRACE] validateValue: not active for postgres_major_version, so skipping
+2025/06/29 23:48:20 [TRACE] validateValue: not active for force-deregister, so skipping
+2025/06/29 23:48:20 [TRACE] validateValue: not active for profile, so skipping
+2025/06/29 23:48:20 [TRACE] validateValue: not active for ami_regions, so skipping
+2025/06/29 23:48:20 [TRACE] validateValue: not active for region, so skipping
+2025/06/29 23:48:20 [TRACE] validateValue: not active for ami_name, so skipping
+2025/06/29 23:48:20 [INFO] Starting external plugin /Users/barneycook/.config/packer/plugins/github.com/hashicorp/amazon/packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 start builder ebs
+2025/06/29 23:48:20 Starting plugin: /Users/barneycook/.config/packer/plugins/github.com/hashicorp/amazon/packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 []string{"/Users/barneycook/.config/packer/plugins/github.com/hashicorp/amazon/packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64", "start", "builder", "ebs"}
+2025/06/29 23:48:20 Waiting for RPC address for: /Users/barneycook/.config/packer/plugins/github.com/hashicorp/amazon/packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64
+2025/06/29 23:48:20 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:20 Plugin address: unix /var/folders/60/djqdr1sn5x5dmwllvmnlf3dc0000gn/T/packer-plugin1087811174
+2025/06/29 23:48:20 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:20 Waiting for connection...
+2025/06/29 23:48:20 Received unix RPC address for /Users/barneycook/.config/packer/plugins/github.com/hashicorp/amazon/packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64: addr is /var/folders/60/djqdr1sn5x5dmwllvmnlf3dc0000gn/T/packer-plugin1087811174
+2025/06/29 23:48:20 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:20 Serving a plugin connection...
+2025/06/29 23:48:20 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:20 [TRACE] starting builder ebs
+2025/06/29 23:48:20 [DEBUG] - common: receiving ConfigSpec as gob
+2025/06/29 23:48:20 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:20 [INFO] (aws): No AWS timeout and polling overrides have been set. Packer will default to waiter-specific delays and timeouts. If you would like to customize the length of time between retries and max number of retries you may do so by setting the environment variables AWS_POLL_DELAY_SECONDS and AWS_MAX_ATTEMPTS or the configuration options aws_polling_delay_seconds and aws_polling_max_attempts to your desired values.
+2025/06/29 23:48:20 [DEBUG] - common: receiving ConfigSpec as gob
+2025/06/29 23:48:20 [INFO] Starting external plugin /opt/homebrew/bin/packer execute packer-provisioner-shell
+2025/06/29 23:48:20 Starting plugin: /opt/homebrew/bin/packer []string{"/opt/homebrew/bin/packer", "execute", "packer-provisioner-shell"}
+2025/06/29 23:48:20 Waiting for RPC address for: /opt/homebrew/bin/packer
+2025/06/29 23:48:20 packer-provisioner-shell plugin: [INFO] Packer version: 1.12.0 [go1.22.9 darwin arm64]
+2025/06/29 23:48:20 packer-provisioner-shell plugin: [INFO] PACKER_CONFIG env var not set; checking the default config file path
+2025/06/29 23:48:20 packer-provisioner-shell plugin: [INFO] PACKER_CONFIG env var set; attempting to open config file: /Users/barneycook/.packerconfig
+2025/06/29 23:48:20 packer-provisioner-shell plugin: [WARN] Config file doesn't exist: /Users/barneycook/.packerconfig
+2025/06/29 23:48:20 packer-provisioner-shell plugin: [INFO] Setting cache directory: /Users/barneycook/.cache/packer
+2025/06/29 23:48:20 packer-provisioner-shell plugin: Plugin address: unix /var/folders/60/djqdr1sn5x5dmwllvmnlf3dc0000gn/T/packer-plugin3115857540
+2025/06/29 23:48:20 packer-provisioner-shell plugin: Waiting for connection...
+2025/06/29 23:48:20 Received unix RPC address for /opt/homebrew/bin/packer: addr is /var/folders/60/djqdr1sn5x5dmwllvmnlf3dc0000gn/T/packer-plugin3115857540
+2025/06/29 23:48:20 packer-provisioner-shell plugin: Serving a plugin connection...
+2025/06/29 23:48:20 packer-provisioner-shell plugin: [DEBUG] - common: sending ConfigSpec as gob
+2025/06/29 23:48:20 [DEBUG] - common: receiving ConfigSpec as gob
+2025/06/29 23:48:20 packer-provisioner-shell plugin: [DEBUG] - common: sending ConfigSpec as gob
+2025/06/29 23:48:20 [DEBUG] - common: receiving ConfigSpec as gob
+2025/06/29 23:48:20 [INFO] Starting external plugin /opt/homebrew/bin/packer execute packer-provisioner-shell
+2025/06/29 23:48:20 Starting plugin: /opt/homebrew/bin/packer []string{"/opt/homebrew/bin/packer", "execute", "packer-provisioner-shell"}
+2025/06/29 23:48:20 Waiting for RPC address for: /opt/homebrew/bin/packer
+2025/06/29 23:48:20 packer-provisioner-shell plugin: [INFO] Packer version: 1.12.0 [go1.22.9 darwin arm64]
+2025/06/29 23:48:20 packer-provisioner-shell plugin: [INFO] PACKER_CONFIG env var not set; checking the default config file path
+2025/06/29 23:48:20 packer-provisioner-shell plugin: [INFO] PACKER_CONFIG env var set; attempting to open config file: /Users/barneycook/.packerconfig
+2025/06/29 23:48:20 packer-provisioner-shell plugin: [WARN] Config file doesn't exist: /Users/barneycook/.packerconfig
+2025/06/29 23:48:20 packer-provisioner-shell plugin: [INFO] Setting cache directory: /Users/barneycook/.cache/packer
+2025/06/29 23:48:20 Received unix RPC address for /opt/homebrew/bin/packer: addr is /var/folders/60/djqdr1sn5x5dmwllvmnlf3dc0000gn/T/packer-plugin262960019
+2025/06/29 23:48:20 packer-provisioner-shell plugin: Plugin address: unix /var/folders/60/djqdr1sn5x5dmwllvmnlf3dc0000gn/T/packer-plugin262960019
+2025/06/29 23:48:20 packer-provisioner-shell plugin: Waiting for connection...
+2025/06/29 23:48:20 packer-provisioner-shell plugin: Serving a plugin connection...
+2025/06/29 23:48:20 packer-provisioner-shell plugin: [DEBUG] - common: sending ConfigSpec as gob
+2025/06/29 23:48:20 [DEBUG] - common: receiving ConfigSpec as gob
+2025/06/29 23:48:20 packer-provisioner-shell plugin: [DEBUG] - common: sending ConfigSpec as gob
+2025/06/29 23:48:20 [DEBUG] - common: receiving ConfigSpec as gob
+2025/06/29 23:48:20 [INFO] Starting external plugin /opt/homebrew/bin/packer execute packer-provisioner-shell
+2025/06/29 23:48:20 Starting plugin: /opt/homebrew/bin/packer []string{"/opt/homebrew/bin/packer", "execute", "packer-provisioner-shell"}
+2025/06/29 23:48:20 Waiting for RPC address for: /opt/homebrew/bin/packer
+2025/06/29 23:48:20 packer-provisioner-shell plugin: [INFO] Packer version: 1.12.0 [go1.22.9 darwin arm64]
+2025/06/29 23:48:20 packer-provisioner-shell plugin: [INFO] PACKER_CONFIG env var not set; checking the default config file path
+2025/06/29 23:48:20 packer-provisioner-shell plugin: [INFO] PACKER_CONFIG env var set; attempting to open config file: /Users/barneycook/.packerconfig
+2025/06/29 23:48:20 packer-provisioner-shell plugin: [WARN] Config file doesn't exist: /Users/barneycook/.packerconfig
+2025/06/29 23:48:20 packer-provisioner-shell plugin: [INFO] Setting cache directory: /Users/barneycook/.cache/packer
+2025/06/29 23:48:20 packer-provisioner-shell plugin: Plugin address: unix /var/folders/60/djqdr1sn5x5dmwllvmnlf3dc0000gn/T/packer-plugin3031467152
+2025/06/29 23:48:20 packer-provisioner-shell plugin: Waiting for connection...
+2025/06/29 23:48:20 Received unix RPC address for /opt/homebrew/bin/packer: addr is /var/folders/60/djqdr1sn5x5dmwllvmnlf3dc0000gn/T/packer-plugin3031467152
+2025/06/29 23:48:20 packer-provisioner-shell plugin: Serving a plugin connection...
+2025/06/29 23:48:20 packer-provisioner-shell plugin: [DEBUG] - common: sending ConfigSpec as gob
+2025/06/29 23:48:20 [DEBUG] - common: receiving ConfigSpec as gob
+2025/06/29 23:48:20 packer-provisioner-shell plugin: [DEBUG] - common: sending ConfigSpec as gob
+2025/06/29 23:48:20 [DEBUG] - common: receiving ConfigSpec as gob
+2025/06/29 23:48:20 [INFO] Starting external plugin /opt/homebrew/bin/packer execute packer-provisioner-file
+2025/06/29 23:48:20 Starting plugin: /opt/homebrew/bin/packer []string{"/opt/homebrew/bin/packer", "execute", "packer-provisioner-file"}
+2025/06/29 23:48:20 Waiting for RPC address for: /opt/homebrew/bin/packer
+2025/06/29 23:48:20 packer-provisioner-file plugin: [INFO] Packer version: 1.12.0 [go1.22.9 darwin arm64]
+2025/06/29 23:48:20 packer-provisioner-file plugin: [INFO] PACKER_CONFIG env var not set; checking the default config file path
+2025/06/29 23:48:20 packer-provisioner-file plugin: [INFO] PACKER_CONFIG env var set; attempting to open config file: /Users/barneycook/.packerconfig
+2025/06/29 23:48:20 packer-provisioner-file plugin: [WARN] Config file doesn't exist: /Users/barneycook/.packerconfig
+2025/06/29 23:48:20 packer-provisioner-file plugin: [INFO] Setting cache directory: /Users/barneycook/.cache/packer
+2025/06/29 23:48:20 packer-provisioner-file plugin: Plugin address: unix /var/folders/60/djqdr1sn5x5dmwllvmnlf3dc0000gn/T/packer-plugin268822800
+2025/06/29 23:48:20 packer-provisioner-file plugin: Waiting for connection...
+2025/06/29 23:48:20 Received unix RPC address for /opt/homebrew/bin/packer: addr is /var/folders/60/djqdr1sn5x5dmwllvmnlf3dc0000gn/T/packer-plugin268822800
+2025/06/29 23:48:20 packer-provisioner-file plugin: Serving a plugin connection...
+2025/06/29 23:48:20 packer-provisioner-file plugin: [DEBUG] - common: sending ConfigSpec as gob
+2025/06/29 23:48:20 [DEBUG] - common: receiving ConfigSpec as gob
+2025/06/29 23:48:20 packer-provisioner-file plugin: [DEBUG] - common: sending ConfigSpec as gob
+2025/06/29 23:48:20 [DEBUG] - common: receiving ConfigSpec as gob
+2025/06/29 23:48:20 [INFO] Starting external plugin /opt/homebrew/bin/packer execute packer-provisioner-file
+2025/06/29 23:48:20 Starting plugin: /opt/homebrew/bin/packer []string{"/opt/homebrew/bin/packer", "execute", "packer-provisioner-file"}
+2025/06/29 23:48:20 Waiting for RPC address for: /opt/homebrew/bin/packer
+2025/06/29 23:48:20 packer-provisioner-file plugin: [INFO] Packer version: 1.12.0 [go1.22.9 darwin arm64]
+2025/06/29 23:48:20 packer-provisioner-file plugin: [INFO] PACKER_CONFIG env var not set; checking the default config file path
+2025/06/29 23:48:20 packer-provisioner-file plugin: [INFO] PACKER_CONFIG env var set; attempting to open config file: /Users/barneycook/.packerconfig
+2025/06/29 23:48:20 packer-provisioner-file plugin: [WARN] Config file doesn't exist: /Users/barneycook/.packerconfig
+2025/06/29 23:48:20 packer-provisioner-file plugin: [INFO] Setting cache directory: /Users/barneycook/.cache/packer
+2025/06/29 23:48:20 packer-provisioner-file plugin: Plugin address: unix /var/folders/60/djqdr1sn5x5dmwllvmnlf3dc0000gn/T/packer-plugin3794496641
+2025/06/29 23:48:20 packer-provisioner-file plugin: Waiting for connection...
+2025/06/29 23:48:20 Received unix RPC address for /opt/homebrew/bin/packer: addr is /var/folders/60/djqdr1sn5x5dmwllvmnlf3dc0000gn/T/packer-plugin3794496641
+2025/06/29 23:48:20 packer-provisioner-file plugin: Serving a plugin connection...
+2025/06/29 23:48:20 packer-provisioner-file plugin: [DEBUG] - common: sending ConfigSpec as gob
+2025/06/29 23:48:20 [DEBUG] - common: receiving ConfigSpec as gob
+2025/06/29 23:48:20 packer-provisioner-file plugin: [DEBUG] - common: sending ConfigSpec as gob
+2025/06/29 23:48:20 [DEBUG] - common: receiving ConfigSpec as gob
+2025/06/29 23:48:20 [INFO] Starting external plugin /opt/homebrew/bin/packer execute packer-provisioner-file
+2025/06/29 23:48:20 Starting plugin: /opt/homebrew/bin/packer []string{"/opt/homebrew/bin/packer", "execute", "packer-provisioner-file"}
+2025/06/29 23:48:20 Waiting for RPC address for: /opt/homebrew/bin/packer
+2025/06/29 23:48:20 packer-provisioner-file plugin: [INFO] Packer version: 1.12.0 [go1.22.9 darwin arm64]
+2025/06/29 23:48:20 packer-provisioner-file plugin: [INFO] PACKER_CONFIG env var not set; checking the default config file path
+2025/06/29 23:48:20 packer-provisioner-file plugin: [INFO] PACKER_CONFIG env var set; attempting to open config file: /Users/barneycook/.packerconfig
+2025/06/29 23:48:20 packer-provisioner-file plugin: [WARN] Config file doesn't exist: /Users/barneycook/.packerconfig
+2025/06/29 23:48:20 packer-provisioner-file plugin: [INFO] Setting cache directory: /Users/barneycook/.cache/packer
+2025/06/29 23:48:20 packer-provisioner-file plugin: Plugin address: unix /var/folders/60/djqdr1sn5x5dmwllvmnlf3dc0000gn/T/packer-plugin2406696735
+2025/06/29 23:48:20 packer-provisioner-file plugin: Waiting for connection...
+2025/06/29 23:48:20 Received unix RPC address for /opt/homebrew/bin/packer: addr is /var/folders/60/djqdr1sn5x5dmwllvmnlf3dc0000gn/T/packer-plugin2406696735
+2025/06/29 23:48:20 packer-provisioner-file plugin: Serving a plugin connection...
+2025/06/29 23:48:20 packer-provisioner-file plugin: [DEBUG] - common: sending ConfigSpec as gob
+2025/06/29 23:48:20 [DEBUG] - common: receiving ConfigSpec as gob
+2025/06/29 23:48:20 packer-provisioner-file plugin: [DEBUG] - common: sending ConfigSpec as gob
+2025/06/29 23:48:20 [DEBUG] - common: receiving ConfigSpec as gob
+2025/06/29 23:48:20 [INFO] Starting external plugin /opt/homebrew/bin/packer execute packer-provisioner-file
+2025/06/29 23:48:20 Starting plugin: /opt/homebrew/bin/packer []string{"/opt/homebrew/bin/packer", "execute", "packer-provisioner-file"}
+2025/06/29 23:48:20 Waiting for RPC address for: /opt/homebrew/bin/packer
+2025/06/29 23:48:20 packer-provisioner-file plugin: [INFO] Packer version: 1.12.0 [go1.22.9 darwin arm64]
+2025/06/29 23:48:20 packer-provisioner-file plugin: [INFO] PACKER_CONFIG env var not set; checking the default config file path
+2025/06/29 23:48:20 packer-provisioner-file plugin: [INFO] PACKER_CONFIG env var set; attempting to open config file: /Users/barneycook/.packerconfig
+2025/06/29 23:48:20 packer-provisioner-file plugin: [WARN] Config file doesn't exist: /Users/barneycook/.packerconfig
+2025/06/29 23:48:20 packer-provisioner-file plugin: [INFO] Setting cache directory: /Users/barneycook/.cache/packer
+2025/06/29 23:48:20 packer-provisioner-file plugin: Plugin address: unix /var/folders/60/djqdr1sn5x5dmwllvmnlf3dc0000gn/T/packer-plugin2379158818
+2025/06/29 23:48:20 packer-provisioner-file plugin: Waiting for connection...
+2025/06/29 23:48:20 Received unix RPC address for /opt/homebrew/bin/packer: addr is /var/folders/60/djqdr1sn5x5dmwllvmnlf3dc0000gn/T/packer-plugin2379158818
+2025/06/29 23:48:20 packer-provisioner-file plugin: Serving a plugin connection...
+2025/06/29 23:48:20 packer-provisioner-file plugin: [DEBUG] - common: sending ConfigSpec as gob
+2025/06/29 23:48:20 [DEBUG] - common: receiving ConfigSpec as gob
+2025/06/29 23:48:20 packer-provisioner-file plugin: [DEBUG] - common: sending ConfigSpec as gob
+2025/06/29 23:48:20 [DEBUG] - common: receiving ConfigSpec as gob
+2025/06/29 23:48:20 [INFO] Starting external plugin /opt/homebrew/bin/packer execute packer-provisioner-file
+2025/06/29 23:48:20 Starting plugin: /opt/homebrew/bin/packer []string{"/opt/homebrew/bin/packer", "execute", "packer-provisioner-file"}
+2025/06/29 23:48:20 Waiting for RPC address for: /opt/homebrew/bin/packer
+2025/06/29 23:48:21 packer-provisioner-file plugin: [INFO] Packer version: 1.12.0 [go1.22.9 darwin arm64]
+2025/06/29 23:48:21 packer-provisioner-file plugin: [INFO] PACKER_CONFIG env var not set; checking the default config file path
+2025/06/29 23:48:21 packer-provisioner-file plugin: [INFO] PACKER_CONFIG env var set; attempting to open config file: /Users/barneycook/.packerconfig
+2025/06/29 23:48:21 packer-provisioner-file plugin: [WARN] Config file doesn't exist: /Users/barneycook/.packerconfig
+2025/06/29 23:48:21 packer-provisioner-file plugin: [INFO] Setting cache directory: /Users/barneycook/.cache/packer
+2025/06/29 23:48:21 Received unix RPC address for /opt/homebrew/bin/packer: addr is /var/folders/60/djqdr1sn5x5dmwllvmnlf3dc0000gn/T/packer-plugin3948343712
+2025/06/29 23:48:21 packer-provisioner-file plugin: Plugin address: unix /var/folders/60/djqdr1sn5x5dmwllvmnlf3dc0000gn/T/packer-plugin3948343712
+2025/06/29 23:48:21 packer-provisioner-file plugin: Waiting for connection...
+2025/06/29 23:48:21 packer-provisioner-file plugin: Serving a plugin connection...
+2025/06/29 23:48:21 packer-provisioner-file plugin: [DEBUG] - common: sending ConfigSpec as gob
+2025/06/29 23:48:21 [DEBUG] - common: receiving ConfigSpec as gob
+2025/06/29 23:48:21 packer-provisioner-file plugin: [DEBUG] - common: sending ConfigSpec as gob
+2025/06/29 23:48:21 [DEBUG] - common: receiving ConfigSpec as gob
+2025/06/29 23:48:21 [INFO] Starting external plugin /opt/homebrew/bin/packer execute packer-provisioner-file
+2025/06/29 23:48:21 Starting plugin: /opt/homebrew/bin/packer []string{"/opt/homebrew/bin/packer", "execute", "packer-provisioner-file"}
+2025/06/29 23:48:21 Waiting for RPC address for: /opt/homebrew/bin/packer
+2025/06/29 23:48:21 packer-provisioner-file plugin: [INFO] Packer version: 1.12.0 [go1.22.9 darwin arm64]
+2025/06/29 23:48:21 packer-provisioner-file plugin: [INFO] PACKER_CONFIG env var not set; checking the default config file path
+2025/06/29 23:48:21 packer-provisioner-file plugin: [INFO] PACKER_CONFIG env var set; attempting to open config file: /Users/barneycook/.packerconfig
+2025/06/29 23:48:21 packer-provisioner-file plugin: [WARN] Config file doesn't exist: /Users/barneycook/.packerconfig
+2025/06/29 23:48:21 packer-provisioner-file plugin: [INFO] Setting cache directory: /Users/barneycook/.cache/packer
+2025/06/29 23:48:21 packer-provisioner-file plugin: Plugin address: unix /var/folders/60/djqdr1sn5x5dmwllvmnlf3dc0000gn/T/packer-plugin655014302
+2025/06/29 23:48:21 packer-provisioner-file plugin: Waiting for connection...
+2025/06/29 23:48:21 Received unix RPC address for /opt/homebrew/bin/packer: addr is /var/folders/60/djqdr1sn5x5dmwllvmnlf3dc0000gn/T/packer-plugin655014302
+2025/06/29 23:48:21 packer-provisioner-file plugin: Serving a plugin connection...
+2025/06/29 23:48:21 packer-provisioner-file plugin: [DEBUG] - common: sending ConfigSpec as gob
+2025/06/29 23:48:21 [DEBUG] - common: receiving ConfigSpec as gob
+2025/06/29 23:48:21 packer-provisioner-file plugin: [DEBUG] - common: sending ConfigSpec as gob
+2025/06/29 23:48:21 [DEBUG] - common: receiving ConfigSpec as gob
+2025/06/29 23:48:21 [INFO] Starting external plugin /opt/homebrew/bin/packer execute packer-provisioner-file
+2025/06/29 23:48:21 Starting plugin: /opt/homebrew/bin/packer []string{"/opt/homebrew/bin/packer", "execute", "packer-provisioner-file"}
+2025/06/29 23:48:21 Waiting for RPC address for: /opt/homebrew/bin/packer
+2025/06/29 23:48:21 packer-provisioner-file plugin: [INFO] Packer version: 1.12.0 [go1.22.9 darwin arm64]
+2025/06/29 23:48:21 packer-provisioner-file plugin: [INFO] PACKER_CONFIG env var not set; checking the default config file path
+2025/06/29 23:48:21 packer-provisioner-file plugin: [INFO] PACKER_CONFIG env var set; attempting to open config file: /Users/barneycook/.packerconfig
+2025/06/29 23:48:21 packer-provisioner-file plugin: [WARN] Config file doesn't exist: /Users/barneycook/.packerconfig
+2025/06/29 23:48:21 packer-provisioner-file plugin: [INFO] Setting cache directory: /Users/barneycook/.cache/packer
+2025/06/29 23:48:21 packer-provisioner-file plugin: Plugin address: unix /var/folders/60/djqdr1sn5x5dmwllvmnlf3dc0000gn/T/packer-plugin1115552611
+2025/06/29 23:48:21 packer-provisioner-file plugin: Waiting for connection...
+2025/06/29 23:48:21 Received unix RPC address for /opt/homebrew/bin/packer: addr is /var/folders/60/djqdr1sn5x5dmwllvmnlf3dc0000gn/T/packer-plugin1115552611
+2025/06/29 23:48:21 packer-provisioner-file plugin: Serving a plugin connection...
+2025/06/29 23:48:21 packer-provisioner-file plugin: [DEBUG] - common: sending ConfigSpec as gob
+2025/06/29 23:48:21 [DEBUG] - common: receiving ConfigSpec as gob
+2025/06/29 23:48:21 packer-provisioner-file plugin: [DEBUG] - common: sending ConfigSpec as gob
+2025/06/29 23:48:21 [DEBUG] - common: receiving ConfigSpec as gob
+2025/06/29 23:48:21 [INFO] Starting external plugin /opt/homebrew/bin/packer execute packer-provisioner-shell
+2025/06/29 23:48:21 Starting plugin: /opt/homebrew/bin/packer []string{"/opt/homebrew/bin/packer", "execute", "packer-provisioner-shell"}
+2025/06/29 23:48:21 Waiting for RPC address for: /opt/homebrew/bin/packer
+2025/06/29 23:48:21 packer-provisioner-shell plugin: [INFO] Packer version: 1.12.0 [go1.22.9 darwin arm64]
+2025/06/29 23:48:21 packer-provisioner-shell plugin: [INFO] PACKER_CONFIG env var not set; checking the default config file path
+2025/06/29 23:48:21 packer-provisioner-shell plugin: [INFO] PACKER_CONFIG env var set; attempting to open config file: /Users/barneycook/.packerconfig
+2025/06/29 23:48:21 packer-provisioner-shell plugin: [WARN] Config file doesn't exist: /Users/barneycook/.packerconfig
+2025/06/29 23:48:21 packer-provisioner-shell plugin: [INFO] Setting cache directory: /Users/barneycook/.cache/packer
+2025/06/29 23:48:21 packer-provisioner-shell plugin: Plugin address: unix /var/folders/60/djqdr1sn5x5dmwllvmnlf3dc0000gn/T/packer-plugin553848001
+2025/06/29 23:48:21 packer-provisioner-shell plugin: Waiting for connection...
+2025/06/29 23:48:21 Received unix RPC address for /opt/homebrew/bin/packer: addr is /var/folders/60/djqdr1sn5x5dmwllvmnlf3dc0000gn/T/packer-plugin553848001
+2025/06/29 23:48:21 packer-provisioner-shell plugin: Serving a plugin connection...
+2025/06/29 23:48:21 packer-provisioner-shell plugin: [DEBUG] - common: sending ConfigSpec as gob
+2025/06/29 23:48:21 [DEBUG] - common: receiving ConfigSpec as gob
+2025/06/29 23:48:21 packer-provisioner-shell plugin: [DEBUG] - common: sending ConfigSpec as gob
+2025/06/29 23:48:21 [DEBUG] - common: receiving ConfigSpec as gob
+2025/06/29 23:48:21 Build debug mode: false
+2025/06/29 23:48:21 Force build: true
+2025/06/29 23:48:21 On error: 
+[1;32mnix-packer-ubuntu.amazon-ebs.ubuntu: output will be in this color.[0m
+
+2025/06/29 23:48:21 Waiting on builds to complete...
+2025/06/29 23:48:21 Starting build run: nix-packer-ubuntu.amazon-ebs.ubuntu
+2025/06/29 23:48:21 Running builder: amazon-ebs
+2025/06/29 23:48:21 [INFO] (telemetry) Starting builder amazon-ebs.ubuntu
+2025/06/29 23:48:21 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:21 [INFO] AWS Auth provider used: "SharedCredentialsProvider"
+2025/06/29 23:48:21 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:21 Found region us-east-1
+2025/06/29 23:48:21 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:21 [INFO] AWS Auth provider used: "SharedCredentialsProvider"
+[1;32m2025-06-29T23:48:21+01:00: ==> nix-packer-ubuntu.amazon-ebs.ubuntu: Force Deregister flag found, skipping prevalidating AMI Name[0m
+2025/06/29 23:48:21 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:21 Using AMI Filters {
+2025/06/29 23:48:21 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin:   Filters: [{
+2025/06/29 23:48:21 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin:       Name: "root-device-type",
+2025/06/29 23:48:21 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin:       Values: ["ebs"]
+2025/06/29 23:48:21 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin:     },{
+2025/06/29 23:48:21 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin:       Name: "virtualization-type",
+2025/06/29 23:48:21 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin:       Values: ["hvm"]
+2025/06/29 23:48:21 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin:     },{
+2025/06/29 23:48:21 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin:       Name: "name",
+2025/06/29 23:48:21 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin:       Values: ["capitala-project-ami-15.8-stage-1"]
+2025/06/29 23:48:21 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin:     }],
+2025/06/29 23:48:21 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin:   IncludeDeprecated: false,
+2025/06/29 23:48:21 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin:   Owners: ["amazon","self"]
+2025/06/29 23:48:21 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: }
+[0;32m2025-06-29T23:48:21+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: Found Image ID: ami-0857098bba6a95bde[0m
+[1;32m2025-06-29T23:48:21+01:00: ==> nix-packer-ubuntu.amazon-ebs.ubuntu: Setting public IP address to true on instance without a subnet ID[0m
+[1;32m2025-06-29T23:48:21+01:00: ==> nix-packer-ubuntu.amazon-ebs.ubuntu: No VPC ID provided, Packer will use the default VPC[0m
+[1;32m2025-06-29T23:48:22+01:00: ==> nix-packer-ubuntu.amazon-ebs.ubuntu: Inferring subnet from the selected VPC "vpc-0ba07cf7a36d288ba"[0m
+[1;32m2025-06-29T23:48:25+01:00: ==> nix-packer-ubuntu.amazon-ebs.ubuntu: Set subnet as "subnet-0fb5ab63f221bfd4f"[0m
+[1;32m2025-06-29T23:48:25+01:00: ==> nix-packer-ubuntu.amazon-ebs.ubuntu: Creating temporary keypair: packer_6861c2b4-2c9c-b54f-7227-939a851cfefa[0m
+[1;32m2025-06-29T23:48:25+01:00: ==> nix-packer-ubuntu.amazon-ebs.ubuntu: Creating temporary security group for this instance: packer_6861c2b9-deea-8d1d-fc16-daff46a8efd1[0m
+2025/06/29 23:48:26 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:26 [DEBUG] Waiting for temporary security group: sg-0232c1b7f5aadfaa9
+2025/06/29 23:48:27 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:27 [DEBUG] Found security group sg-0232c1b7f5aadfaa9
+[1;32m2025-06-29T23:48:27+01:00: ==> nix-packer-ubuntu.amazon-ebs.ubuntu: Authorizing access to port 22 from [0.0.0.0/0] in the temporary security groups...[0m
+[1;32m2025-06-29T23:48:27+01:00: ==> nix-packer-ubuntu.amazon-ebs.ubuntu: Launching a source AWS instance...[0m
+[0;32m2025-06-29T23:48:27+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: Adding tag: "appType": "postgres"[0m
+[0;32m2025-06-29T23:48:27+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: Adding tag: "creator": "packer"[0m
+[0;32m2025-06-29T23:48:27+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: Adding tag: "packerExecutionId": "1751237300"[0m
+[0;32m2025-06-29T23:48:27+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: Adding tag: "creator": "packer"[0m
+[0;32m2025-06-29T23:48:27+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: Adding tag: "appType": "postgres"[0m
+[1;32m2025-06-29T23:48:27+01:00: ==> nix-packer-ubuntu.amazon-ebs.ubuntu: changing public IP address config to true for instance on subnet "subnet-0fb5ab63f221bfd4f"[0m
+[0;32m2025-06-29T23:48:30+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: Instance ID: i-0ad42a1ac931130cd[0m
+[1;32m2025-06-29T23:48:30+01:00: ==> nix-packer-ubuntu.amazon-ebs.ubuntu: Waiting for instance (i-0ad42a1ac931130cd) to become ready...[0m
+2025/06/29 23:48:46 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:46 [INFO] Not using winrm communicator, skipping get password...
+[1;32m2025-06-29T23:48:46+01:00: ==> nix-packer-ubuntu.amazon-ebs.ubuntu: Using SSH communicator to connect: 3.236.227.32[0m
+2025/06/29 23:48:46 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:46 [INFO] Waiting for SSH, up to timeout: 15m0s
+[1;32m2025-06-29T23:48:46+01:00: ==> nix-packer-ubuntu.amazon-ebs.ubuntu: Waiting for SSH to become available...[0m
+2025/06/29 23:48:46 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:46 Using host value: 3.236.227.32
+2025/06/29 23:48:47 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:47 [INFO] Attempting SSH connection to 3.236.227.32:22...
+2025/06/29 23:48:47 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:47 [DEBUG] reconnecting to TCP connection for SSH
+2025/06/29 23:48:47 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:47 [DEBUG] handshaking with SSH
+2025/06/29 23:48:47 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:47 [DEBUG] handshake complete!
+2025/06/29 23:48:47 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:47 [DEBUG] Opening new ssh session
+2025/06/29 23:48:48 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:48 [INFO] agent forwarding enabled
+[1;32m2025-06-29T23:48:48+01:00: ==> nix-packer-ubuntu.amazon-ebs.ubuntu: Connected to SSH![0m
+2025/06/29 23:48:48 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:48 Running the provision hook
+2025/06/29 23:48:48 [INFO] (telemetry) Starting provisioner shell
+2025/06/29 23:48:48 packer-provisioner-shell plugin: [DEBUG] - common: sending ConfigSpec as gob
+2025/06/29 23:48:48 [DEBUG] - common: receiving ConfigSpec as gob
+[1;32m2025-06-29T23:48:48+01:00: ==> nix-packer-ubuntu.amazon-ebs.ubuntu: Provisioning with shell script: /var/folders/60/djqdr1sn5x5dmwllvmnlf3dc0000gn/T/packer-shell2382155132[0m
+2025/06/29 23:48:48 packer-provisioner-shell plugin: Opening /var/folders/60/djqdr1sn5x5dmwllvmnlf3dc0000gn/T/packer-shell2382155132 for reading
+2025/06/29 23:48:48 packer-provisioner-shell plugin: [INFO] 516 bytes written for 'uploadData'
+2025/06/29 23:48:48 [INFO] 516 bytes written for 'uploadData'
+2025/06/29 23:48:48 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:48 [DEBUG] Opening new ssh session
+2025/06/29 23:48:48 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:48 [DEBUG] Starting remote scp process:  scp -vt /tmp
+2025/06/29 23:48:48 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:48 [DEBUG] Started SCP session, beginning transfers...
+2025/06/29 23:48:48 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:48 [DEBUG] Copying input data into temporary file so we can read the length
+2025/06/29 23:48:48 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:48 [DEBUG] scp: Uploading script_8643.sh: perms=C0644 size=516
+2025/06/29 23:48:48 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:48 [DEBUG] SCP session complete, closing stdin pipe.
+2025/06/29 23:48:48 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:48 [DEBUG] Waiting for SSH session to complete.
+2025/06/29 23:48:48 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:48 [DEBUG] scp stderr (length 31): Sink: C0644 516 script_8643.sh
+2025/06/29 23:48:48 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:48 [DEBUG] Opening new ssh session
+2025/06/29 23:48:48 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:48 [DEBUG] starting remote command: chmod 0755 /tmp/script_8643.sh
+2025/06/29 23:48:48 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:48 [INFO] RPC endpoint: Communicator ended with: 0
+2025/06/29 23:48:48 [INFO] RPC client: Communicator ended with: 0
+2025/06/29 23:48:48 [INFO] RPC endpoint: Communicator ended with: 0
+2025/06/29 23:48:48 packer-provisioner-shell plugin: [INFO] RPC client: Communicator ended with: 0
+2025/06/29 23:48:48 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:48 [DEBUG] Opening new ssh session
+2025/06/29 23:48:48 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:48 [DEBUG] starting remote command: chmod +x /tmp/script_8643.sh; PACKER_BUILDER_TYPE='amazon-ebs' PACKER_BUILD_NAME='ubuntu'  /tmp/script_8643.sh
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: === Diagnostic: All block devices ===[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: NAME               SIZE TYPE MOUNTPOINT[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: nvme0n1     10737418240 disk[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: ├─nvme0n1p1   103809024 part /boot/efi[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: └─nvme0n1p2 10631512064 part /[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: nvme2n1     64424509440 disk[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: nvme1n1     21474836480 disk[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: nvme3n1      8589934592 disk /data[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: === Diagnostic: NVMe devices ===[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: crw------- 1 root root 238, 0 Jun 29 22:48 /dev/nvme0[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: brw-rw---- 1 root disk 259, 0 Jun 29 22:48 /dev/nvme0n1[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: brw-rw---- 1 root disk 259, 4 Jun 29 22:48 /dev/nvme0n1p1[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: brw-rw---- 1 root disk 259, 5 Jun 29 22:48 /dev/nvme0n1p2[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: crw------- 1 root root 238, 1 Jun 29 22:48 /dev/nvme1[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: brw-rw---- 1 root disk 259, 2 Jun 29 22:48 /dev/nvme1n1[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: crw------- 1 root root 238, 2 Jun 29 22:48 /dev/nvme2[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: brw-rw---- 1 root disk 259, 1 Jun 29 22:48 /dev/nvme2n1[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: crw------- 1 root root 238, 3 Jun 29 22:48 /dev/nvme3[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: brw-rw---- 1 root disk 259, 3 Jun 29 22:48 /dev/nvme3n1[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: === Diagnostic: Current mounts ===[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: /dev/nvme0n1p2 on / type ext4 (rw,relatime,discard)[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: /dev/nvme3n1 on /data type ext4 (rw,relatime,discard)[0m
+2025/06/29 23:48:48 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:48 [INFO] RPC endpoint: Communicator ended with: 0
+2025/06/29 23:48:48 [INFO] 1704 bytes written for 'stdout'
+2025/06/29 23:48:48 [INFO] 0 bytes written for 'stderr'
+2025/06/29 23:48:48 [INFO] RPC client: Communicator ended with: 0
+2025/06/29 23:48:48 [INFO] RPC endpoint: Communicator ended with: 0
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: === Diagnostic: Disk usage ===[0m
+2025/06/29 23:48:48 packer-provisioner-shell plugin: [INFO] 1704 bytes written for 'stdout'
+2025/06/29 23:48:48 packer-provisioner-shell plugin: [INFO] 0 bytes written for 'stderr'
+2025/06/29 23:48:48 packer-provisioner-shell plugin: [INFO] RPC client: Communicator ended with: 0
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: Filesystem      Size  Used Avail Use% Mounted on[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: udev            3.8G     0  3.8G   0% /dev[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: tmpfs           778M  636K  777M   1% /run[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: /dev/nvme0n1p2  9.7G  1.9G  7.8G  20% /[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: tmpfs           3.8G     0  3.8G   0% /dev/shm[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: tmpfs           5.0M     0  5.0M   0% /run/lock[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: tmpfs           3.8G     0  3.8G   0% /sys/fs/cgroup[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: /dev/nvme3n1    7.8G   28K  7.7G   1% /data[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: /dev/nvme0n1p1   98M  298K   98M   1% /boot/efi[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: tmpfs           778M     0  778M   0% /run/user/1000[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: === Diagnostic: Find large volumes ===[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: Device /dev/nvme0n1 is 10[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: 0[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: 9GB[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: Device /dev/nvme1n1 is 20GB[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: Device /dev/nvme2n1 is 60GB[0m
+[0;32m2025-06-29T23:48:48+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: Device /dev/nvme3n1 is 8GB[0m
+2025/06/29 23:48:48 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:48 [DEBUG] Opening new ssh session
+2025/06/29 23:48:49 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:49 [DEBUG] starting remote command: rm -f /tmp/script_8643.sh
+2025/06/29 23:48:49 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:49 [INFO] RPC endpoint: Communicator ended with: 0
+2025/06/29 23:48:49 [INFO] RPC client: Communicator ended with: 0
+2025/06/29 23:48:49 [INFO] RPC endpoint: Communicator ended with: 0
+2025/06/29 23:48:49 packer-provisioner-shell plugin: [INFO] RPC client: Communicator ended with: 0
+2025/06/29 23:48:49 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:49 [DEBUG] Opening new ssh session
+2025/06/29 23:48:49 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:49 [DEBUG] starting remote command: rm -f
+2025/06/29 23:48:49 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:49 [INFO] RPC endpoint: Communicator ended with: 0
+2025/06/29 23:48:49 [INFO] RPC client: Communicator ended with: 0
+2025/06/29 23:48:49 [INFO] RPC endpoint: Communicator ended with: 0
+2025/06/29 23:48:49 packer-provisioner-shell plugin: [INFO] RPC client: Communicator ended with: 0
+2025/06/29 23:48:49 [INFO] (telemetry) ending shell
+2025/06/29 23:48:49 [INFO] (telemetry) Starting provisioner shell
+2025/06/29 23:48:49 packer-provisioner-shell plugin: [DEBUG] - common: sending ConfigSpec as gob
+2025/06/29 23:48:49 [DEBUG] - common: receiving ConfigSpec as gob
+[1;32m2025-06-29T23:48:49+01:00: ==> nix-packer-ubuntu.amazon-ebs.ubuntu: Provisioning with shell script: /var/folders/60/djqdr1sn5x5dmwllvmnlf3dc0000gn/T/packer-shell3063629313[0m
+2025/06/29 23:48:49 packer-provisioner-shell plugin: Opening /var/folders/60/djqdr1sn5x5dmwllvmnlf3dc0000gn/T/packer-shell3063629313 for reading
+2025/06/29 23:48:49 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:49 [DEBUG] Opening new ssh session
+2025/06/29 23:48:49 packer-provisioner-shell plugin: [INFO] 1241 bytes written for 'uploadData'
+2025/06/29 23:48:49 [INFO] 1241 bytes written for 'uploadData'
+2025/06/29 23:48:49 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:49 [DEBUG] Starting remote scp process:  scp -vt /tmp
+2025/06/29 23:48:49 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:49 [DEBUG] Started SCP session, beginning transfers...
+2025/06/29 23:48:49 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:49 [DEBUG] Copying input data into temporary file so we can read the length
+2025/06/29 23:48:49 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:49 [DEBUG] scp: Uploading script_9221.sh: perms=C0644 size=1241
+2025/06/29 23:48:49 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:49 [DEBUG] SCP session complete, closing stdin pipe.
+2025/06/29 23:48:49 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:49 [DEBUG] Waiting for SSH session to complete.
+2025/06/29 23:48:49 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:49 [DEBUG] scp stderr (length 32): Sink: C0644 1241 script_9221.sh
+2025/06/29 23:48:49 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:49 [DEBUG] Opening new ssh session
+2025/06/29 23:48:49 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:49 [DEBUG] starting remote command: chmod 0755 /tmp/script_9221.sh
+2025/06/29 23:48:50 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:50 [INFO] RPC endpoint: Communicator ended with: 0
+2025/06/29 23:48:50 [INFO] RPC client: Communicator ended with: 0
+2025/06/29 23:48:50 [INFO] RPC endpoint: Communicator ended with: 0
+2025/06/29 23:48:50 packer-provisioner-shell plugin: [INFO] RPC client: Communicator ended with: 0
+2025/06/29 23:48:50 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:50 [DEBUG] Opening new ssh session
+2025/06/29 23:48:50 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:50 [DEBUG] starting remote command: chmod +x /tmp/script_9221.sh; PACKER_BUILDER_TYPE='amazon-ebs' PACKER_BUILD_NAME='ubuntu'  /tmp/script_9221.sh
+[0;32m2025-06-29T23:48:50+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: === Setting up 60GB build volume for Nix ===[0m
+[0;32m2025-06-29T23:48:50+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: Found 60GB build volume at /dev/nvme2n1[0m
+[0;32m2025-06-29T23:48:50+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: Formatting and mounting /dev/nvme2n1[0m
+[0;32m2025-06-29T23:48:50+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: mke2fs 1.45.5 (07-Jan-2020)[0m
+[0;32m2025-06-29T23:48:50+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: Creating filesystem with 15728640 4k blocks and 3932160 inodes[0m
+[0;32m2025-06-29T23:48:50+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: Filesystem UUID: d63d98e6-464e-42e9-98bb-712c86698588[0m
+[0;32m2025-06-29T23:48:50+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: Superblock backups stored on blocks:[0m
+[0;32m2025-06-29T23:48:50+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: 	32768, 98304, 163840, 229376, 294912, 819200, 884736, 1605632, 2654208,[0m
+[0;32m2025-06-29T23:48:50+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: 	4096000, 7962624, 11239424[0m
+[0;32m2025-06-29T23:48:50+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu:[0m
+[0;32m2025-06-29T23:48:50+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: Allocating group tables:   0/480       done[0m
+[0;32m2025-06-29T23:48:50+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: Writing inode tables:   0/480       done[0m
+[0;32m2025-06-29T23:48:51+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: Creating journal (65536 blocks): done[0m
+[0;32m2025-06-29T23:48:51+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: Writing superblocks and filesystem accounting information:   0/480       done[0m
+[0;32m2025-06-29T23:48:51+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu:[0m
+[0;32m2025-06-29T23:48:51+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: export TMPDIR=/nix/var/nix/tmp/build[0m
+[0;32m2025-06-29T23:48:51+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: export NIX_BUILD_TOP=/nix/var/nix/tmp/build[0m
+[0;32m2025-06-29T23:48:51+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: Successfully mounted 60GB volume to /nix/var/nix/tmp[0m
+[0;32m2025-06-29T23:48:51+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: === Final disk usage ===[0m
+[0;32m2025-06-29T23:48:51+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: Filesystem      Size  Used Avail Use% Mounted on[0m
+[0;32m2025-06-29T23:48:51+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: udev            3.8G     0  3.8G   0% /dev[0m
+[0;32m2025-06-29T23:48:51+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: tmpfs           778M  640K  777M   1% /run[0m
+[0;32m2025-06-29T23:48:51+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: /dev/nvme0n1p2  9.7G  1.9G  7.8G  20% /[0m
+[0;32m2025-06-29T23:48:51+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: tmpfs           3.8G     0  3.8G   0% /dev/shm[0m
+[0;32m2025-06-29T23:48:51+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: tmpfs           5.0M     0  5.0M   0% /run/lock[0m
+[0;32m2025-06-29T23:48:51+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: tmpfs           3.8G     0  3.8G   0% /sys/fs/cgroup[0m
+[0;32m2025-06-29T23:48:51+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: /dev/nvme3n1    7.8G   28K  7.7G   1% /data[0m
+2025/06/29 23:48:51 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:51 [INFO] RPC endpoint: Communicator ended with: 0
+2025/06/29 23:48:51 [INFO] 1751 bytes written for 'stdout'
+2025/06/29 23:48:51 [INFO] 0 bytes written for 'stderr'
+2025/06/29 23:48:51 [INFO] RPC client: Communicator ended with: 0
+2025/06/29 23:48:51 [INFO] RPC endpoint: Communicator ended with: 0
+2025/06/29 23:48:51 packer-provisioner-shell plugin: [INFO] 0 bytes written for 'stderr'
+2025/06/29 23:48:51 packer-provisioner-shell plugin: [INFO] 1751 bytes written for 'stdout'
+[0;32m2025-06-29T23:48:51+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: /dev/nvme0n1p1   98M  298K   98M   1% /boot/efi[0m
+2025/06/29 23:48:51 packer-provisioner-shell plugin: [INFO] RPC client: Communicator ended with: 0
+[0;32m2025-06-29T23:48:51+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: tmpfs           778M     0  778M   0% /run/user/1000[0m
+[0;32m2025-06-29T23:48:51+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: /dev/nvme2n1     59G   28K   56G   1% /nix/var/nix/tmp[0m
+[0;32m2025-06-29T23:48:51+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: === Mount details ===[0m
+[0;32m2025-06-29T23:48:51+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: /dev/nvme0n1p2 on / type ext4 (rw,relatime,discard)[0m
+[0;32m2025-06-29T23:48:51+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: /dev/nvme3n1 on /data type ext4 (rw,relatime,discard)[0m
+[0;32m2025-06-29T23:48:51+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: /dev/nvme0n1p1 on /boot/efi type vfat (rw,relatime,fmask=0077,dmask=0077,codepage=437,iocharset=iso8859-1,shortname=mixed,errors=remount-ro)[0m
+[0;32m2025-06-29T23:48:51+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: /dev/nvme2n1 on /nix/var/nix/tmp type ext4 (rw,relatime)[0m
+2025/06/29 23:48:51 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:51 [DEBUG] Opening new ssh session
+2025/06/29 23:48:51 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:51 [DEBUG] starting remote command: rm -f /tmp/script_9221.sh
+2025/06/29 23:48:51 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:51 [INFO] RPC endpoint: Communicator ended with: 0
+2025/06/29 23:48:51 [INFO] RPC client: Communicator ended with: 0
+2025/06/29 23:48:51 [INFO] RPC endpoint: Communicator ended with: 0
+2025/06/29 23:48:51 packer-provisioner-shell plugin: [INFO] RPC client: Communicator ended with: 0
+2025/06/29 23:48:51 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:51 [DEBUG] Opening new ssh session
+2025/06/29 23:48:52 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:52 [DEBUG] starting remote command: rm -f
+2025/06/29 23:48:52 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:52 [INFO] RPC endpoint: Communicator ended with: 0
+2025/06/29 23:48:52 [INFO] RPC client: Communicator ended with: 0
+2025/06/29 23:48:52 [INFO] RPC endpoint: Communicator ended with: 0
+2025/06/29 23:48:52 packer-provisioner-shell plugin: [INFO] RPC client: Communicator ended with: 0
+2025/06/29 23:48:52 [INFO] (telemetry) ending shell
+2025/06/29 23:48:52 [INFO] (telemetry) Starting provisioner shell
+2025/06/29 23:48:52 packer-provisioner-shell plugin: [DEBUG] - common: sending ConfigSpec as gob
+2025/06/29 23:48:52 [DEBUG] - common: receiving ConfigSpec as gob
+2025/06/29 23:48:52 packer-provisioner-shell plugin: Opening /var/folders/60/djqdr1sn5x5dmwllvmnlf3dc0000gn/T/packer-shell2975284012 for reading
+[1;32m2025-06-29T23:48:52+01:00: ==> nix-packer-ubuntu.amazon-ebs.ubuntu: Provisioning with shell script: /var/folders/60/djqdr1sn5x5dmwllvmnlf3dc0000gn/T/packer-shell2975284012[0m
+2025/06/29 23:48:52 packer-provisioner-shell plugin: [INFO] 672 bytes written for 'uploadData'
+2025/06/29 23:48:52 [INFO] 672 bytes written for 'uploadData'
+2025/06/29 23:48:52 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:52 [DEBUG] Opening new ssh session
+2025/06/29 23:48:52 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:52 [DEBUG] Starting remote scp process:  scp -vt /tmp
+2025/06/29 23:48:52 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:52 [DEBUG] Started SCP session, beginning transfers...
+2025/06/29 23:48:52 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:52 [DEBUG] Copying input data into temporary file so we can read the length
+2025/06/29 23:48:52 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:52 [DEBUG] scp: Uploading script_6129.sh: perms=C0644 size=672
+2025/06/29 23:48:52 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:52 [DEBUG] SCP session complete, closing stdin pipe.
+2025/06/29 23:48:52 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:52 [DEBUG] Waiting for SSH session to complete.
+2025/06/29 23:48:52 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:52 [DEBUG] scp stderr (length 31): Sink: C0644 672 script_6129.sh
+2025/06/29 23:48:52 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:52 [DEBUG] Opening new ssh session
+2025/06/29 23:48:52 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:52 [DEBUG] starting remote command: chmod 0755 /tmp/script_6129.sh
+2025/06/29 23:48:52 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:52 [INFO] RPC endpoint: Communicator ended with: 0
+2025/06/29 23:48:52 [INFO] RPC client: Communicator ended with: 0
+2025/06/29 23:48:52 [INFO] RPC endpoint: Communicator ended with: 0
+2025/06/29 23:48:52 packer-provisioner-shell plugin: [INFO] RPC client: Communicator ended with: 0
+2025/06/29 23:48:52 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:52 [DEBUG] Opening new ssh session
+2025/06/29 23:48:52 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:52 [DEBUG] starting remote command: chmod +x /tmp/script_6129.sh; PACKER_BUILDER_TYPE='amazon-ebs' PACKER_BUILD_NAME='ubuntu'  /tmp/script_6129.sh
+[0;32m2025-06-29T23:48:52+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: === DISK USAGE BEFORE NIX INSTALL ===[0m
+[0;32m2025-06-29T23:48:52+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: Filesystem      Size  Used Avail Use% Mounted on[0m
+[0;32m2025-06-29T23:48:52+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: udev            3.8G     0  3.8G   0% /dev[0m
+[0;32m2025-06-29T23:48:52+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: tmpfs           778M  640K  777M   1% /run[0m
+[0;32m2025-06-29T23:48:52+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: /dev/nvme0n1p2  9.7G  1.9G  7.8G  20% /[0m
+[0;32m2025-06-29T23:48:52+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: tmpfs           3.8G     0  3.8G   0% /dev/shm[0m
+[0;32m2025-06-29T23:48:52+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: tmpfs           5.0M     0  5.0M   0% /run/lock[0m
+[0;32m2025-06-29T23:48:52+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: tmpfs           3.8G     0  3.8G   0% /sys/fs/cgroup[0m
+[0;32m2025-06-29T23:48:52+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: /dev/nvme3n1    7.8G   28K  7.7G   1% /data[0m
+[0;32m2025-06-29T23:48:52+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: /dev/nvme0n1p1   98M  298K   98M   1% /boot/efi[0m
+[0;32m2025-06-29T23:48:52+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: tmpfs           778M     0  778M   0% /run/user/1000[0m
+[0;32m2025-06-29T23:48:52+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: /dev/nvme2n1     59G   28K   56G   1% /nix/var/nix/tmp[0m
+[0;32m2025-06-29T23:48:52+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: === NIX CONFIGURATION ON EC2 ===[0m
+[0;32m2025-06-29T23:48:52+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: No nix.conf[0m
+[0;32m2025-06-29T23:48:52+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: === NIX DAEMON ENVIRONMENT ===[0m
+[0;32m2025-06-29T23:48:52+01:00:     nix-packer-ubuntu.amazon-ebs.ubuntu: bash: /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh: No such file or directory[0m
+2025/06/29 23:48:52 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:52 [ERROR] Remote command exited with '1': chmod +x /tmp/script_6129.sh; PACKER_BUILDER_TYPE='amazon-ebs' PACKER_BUILD_NAME='ubuntu'  /tmp/script_6129.sh
+2025/06/29 23:48:52 packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64 plugin: 2025/06/29 23:48:52 [INFO] RPC endpoint: Communicator ended with: 1
+2025/06/29 23:48:52 [INFO] 744 bytes written for 'stdout'
+2025/06/29 23:48:52 [INFO] 0 bytes written for 'stderr'
+2025/06/29 23:48:52 [INFO] RPC client: Communicator ended with: 1
+2025/06/29 23:48:52 [INFO] RPC endpoint: Communicator ended with: 1
+2025/06/29 23:48:52 packer-provisioner-shell plugin: [INFO] 744 bytes written for 'stdout'
+2025/06/29 23:48:52 packer-provisioner-shell plugin: [INFO] 0 bytes written for 'stderr'
+2025/06/29 23:48:52 packer-provisioner-shell plugin: [INFO] RPC client: Communicator ended with: 1
+2025/06/29 23:48:52 [INFO] (telemetry) ending shell
+[1;32m2025-06-29T23:48:52+01:00: ==> nix-packer-ubuntu.amazon-ebs.ubuntu: Provisioning step had errors: Running the cleanup provisioner, if present...[0m
+[1;32m2025-06-29T23:48:52+01:00: ==> nix-packer-ubuntu.amazon-ebs.ubuntu: Terminating the source AWS instance...[0m
+[1;32m2025-06-29T23:50:11+01:00: ==> nix-packer-ubuntu.amazon-ebs.ubuntu: Cleaning up any extra volumes...[0m
+[1;32m2025-06-29T23:50:11+01:00: ==> nix-packer-ubuntu.amazon-ebs.ubuntu: No volumes to clean up, skipping[0m
+[1;32m2025-06-29T23:50:11+01:00: ==> nix-packer-ubuntu.amazon-ebs.ubuntu: Deleting temporary security group...[0m
+[1;32m2025-06-29T23:50:12+01:00: ==> nix-packer-ubuntu.amazon-ebs.ubuntu: Deleting temporary keypair...[0m
+2025/06/29 23:50:13 [INFO] (telemetry) ending amazon-ebs.ubuntu
+[1;31m2025-06-29T23:50:13+01:00: Build 'nix-packer-ubuntu.amazon-ebs.ubuntu' errored after 1 minute 52 seconds: Script exited with non-zero exit status: 1. Allowed exit codes are: [0][0m
+
+==> Wait completed after 1 minute 52 seconds
+==> Wait completed after 1 minute 52 seconds
+2025/06/29 23:50:13 machine readable: error-count []string{"1"}
+
+==> Some builds didn't complete successfully and had errors:
+==> Some builds didn't complete successfully and had errors:
+2025/06/29 23:50:13 machine readable: nix-packer-ubuntu.amazon-ebs.ubuntu,error []string{"Script exited with non-zero exit status: 1. Allowed exit codes are: [0]"}
+--> nix-packer-ubuntu.amazon-ebs.ubuntu: Script exited with non-zero exit status: 1. Allowed exit codes are: [0]
+
+==> Builds finished but no artifacts were created.
+==> Builds finished but no artifacts were created.
+2025/06/29 23:50:13 [INFO] (telemetry) Finalizing.
+2025/06/29 23:50:13 waiting for all plugin processes to complete...
+2025/06/29 23:50:13 /opt/homebrew/bin/packer: plugin process exited
+2025/06/29 23:50:13 /opt/homebrew/bin/packer: plugin process exited
+2025/06/29 23:50:13 /opt/homebrew/bin/packer: plugin process exited
+2025/06/29 23:50:13 /Users/barneycook/.config/packer/plugins/github.com/hashicorp/amazon/packer-plugin-amazon_v1.3.4_x5.0_darwin_arm64: plugin process exited
+2025/06/29 23:50:13 /opt/homebrew/bin/packer: plugin process exited
+2025/06/29 23:50:13 /opt/homebrew/bin/packer: plugin process exited
+2025/06/29 23:50:13 /opt/homebrew/bin/packer: plugin process exited
+2025/06/29 23:50:13 /opt/homebrew/bin/packer: plugin process exited
+2025/06/29 23:50:13 /opt/homebrew/bin/packer: plugin process exited
+2025/06/29 23:50:13 /opt/homebrew/bin/packer: plugin process exited
+2025/06/29 23:50:13 /opt/homebrew/bin/packer: plugin process exited
+2025/06/29 23:50:13 /opt/homebrew/bin/packer: plugin process exited
