@@ -225,7 +225,8 @@ build {
       # FIXED: Optimized Nix configuration for disk space management
       "NIX_BUILD_CORES=4",
       "TMPDIR=/tmp/nix-build",
-      "NIX_BUILD_TOP=/tmp/nix-build"
+      "NIX_BUILD_TOP=/tmp/nix-build",
+      "_NIX_FORCE_HTTP_BINARY_CACHE_UPDATE=1" 
     ]
     script           = "scripts/nix-provision.sh"
     expect_disconnect = true    # Allow SSH disconnection
