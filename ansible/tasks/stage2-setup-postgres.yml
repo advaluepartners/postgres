@@ -89,6 +89,22 @@
 #   delay: 5
 #   until: install_postgres.rc == 0
 
+- name: Debug Nix environment before install
+  shell: |
+    echo "=== Environment Variables ==="
+    env | grep -E "(TMPDIR|NIX_|BUILD)"
+    echo "=== Nix Config ==="
+    sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix show-config | head -20"
+    echo "=== Available Space ==="
+    df -h
+    echo "=== Nix Store Location ==="
+    sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix-store --version && nix eval --expr 'builtins.storeDir'"
+  register: debug_nix_env
+
+- name: Show debug output
+  debug:
+    var: debug_nix_env.stdout_lines
+
 - name: Install Postgres from local flake
   become: yes
   shell: |

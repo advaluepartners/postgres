@@ -200,6 +200,24 @@ build {
     ]
   }
 
+  provisioner "shell" {
+  inline = [
+    "echo '=== DISK USAGE BEFORE NIX INSTALL ==='",
+    "df -h",
+    "echo '=== NIX CONFIGURATION ON EC2 ==='", 
+    "cat /etc/nix/nix.conf 2>/dev/null || echo 'No nix.conf'",
+    "echo '=== NIX DAEMON ENVIRONMENT ==='",
+    "sudo -u postgres bash -c '. /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && env | grep -E \"(TMPDIR|NIX_|BUILD)\"'",
+    "echo '=== NIX SHOW CONFIG ON EC2 ==='",
+    "sudo -u postgres bash -c '. /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix show-config | grep -E \"(build-dir|max-jobs|cores|store)\"'",
+    "echo '=== MOUNT POINTS ==='",
+    "mount | grep nvme",
+    "echo '=== NIX DIRECTORIES ==='",
+    "ls -la /nix/ || echo 'No /nix'",
+    "du -sh /nix/* 2>/dev/null || echo 'No nix subdirs'"
+  ]
+ }
+
   provisioner "file" {
     source = "ansible"
     destination = "/tmp/ansible-playbook"
@@ -239,10 +257,8 @@ build {
     environment_vars = [
       "GIT_SHA=${var.git_commit_sha}",
       "POSTGRES_MAJOR_VERSION=${var.postgres_major_version}",
-      # FIXED: Optimized Nix configuration for disk space management
+      # Optimized Nix configuration for disk space management
       "NIX_BUILD_CORES=4",
-      "TMPDIR=/tmp/nix-build",
-      "NIX_BUILD_TOP=/tmp/nix-build",
       "_NIX_FORCE_HTTP_BINARY_CACHE_UPDATE=1" 
     ]
     script           = "scripts/nix-provision.sh"
