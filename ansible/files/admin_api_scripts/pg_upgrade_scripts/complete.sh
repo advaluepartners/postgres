@@ -71,7 +71,7 @@ EOF
         insert into cron.job_run_details select * from cron_job_run_details;
         select setval('cron.jobid_seq', coalesce(max(jobid), 0) + 1, false) from cron.job;
         select setval('cron.runid_seq', coalesce(max(runid), 0) + 1, false) from cron.job_run_details;
-        update cron.job set username = 'postgres' where username = 'supabase_admin';
+        update cron.job set username = 'postgres' where username = 'capitala_admin';
         commit;
 EOF
         )
@@ -251,7 +251,7 @@ function start_vacuum_analyze {
         # shellcheck disable=SC1091
         source "/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh"
     fi
-    vacuumdb --all --analyze-in-stages -U supabase_admin -h localhost -p 5432
+    vacuumdb --all --analyze-in-stages -U capitala_admin -h localhost -p 5432
     echo "Upgrade job completed"
 }
 

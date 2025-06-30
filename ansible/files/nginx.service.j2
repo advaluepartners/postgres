@@ -1,8 +1,7 @@
 [Unit]
 Description=nginx server
-After=network.target docker.service postgrest.service gotrue.service adminapi.service
-Wants=docker.service postgrest.service gotrue.service adminapi.service
-Requires=docker.service
+After=network.target postgrest.service gotrue.service adminapi.service remote-fs.target nss-lookup.target
+Wants=postgrest.service gotrue.service adminapi.service
 
 [Service]
 Type=forking

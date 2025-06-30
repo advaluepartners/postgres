@@ -3,7 +3,7 @@
 set -eEuo pipefail
 
 export PGPASSWORD=postgres
-export PGUSER=supabase_admin
+export PGUSER=capitala_admin
 export PGHOST=localhost
 export PGDATABASE=postgres
 

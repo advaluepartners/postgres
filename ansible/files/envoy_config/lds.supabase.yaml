@@ -69,7 +69,7 @@ resources:
                                     - header:
                                         name: apikey
                                         string_match:
-                                          exact: supabase_admin_key
+                                          exact: capitala_admin_key
                                     - header:
                                         name: ':path'
                                         string_match:
@@ -81,7 +81,7 @@ resources:
                                     - header:
                                         name: ':path'
                                         string_match:
-                                          contains: apikey=supabase_admin_key
+                                          contains: apikey=capitala_admin_key
                         origin_protection_key_missing:
                           permissions:
                             - any: true

@@ -24,7 +24,7 @@ postgresql_schema_sql_content = """
 ALTER DATABASE postgres SET "app.settings.jwt_secret" TO  'my_jwt_secret_which_is_not_so_secret';
 ALTER DATABASE postgres SET "app.settings.jwt_exp" TO 3600;
 
-ALTER USER supabase_admin WITH PASSWORD 'postgres';
+ALTER USER capitala_admin WITH PASSWORD 'postgres';
 ALTER USER postgres WITH PASSWORD 'postgres';
 ALTER USER authenticator WITH PASSWORD 'postgres';
 ALTER USER pgbouncer WITH PASSWORD 'postgres';
@@ -32,7 +32,7 @@ ALTER USER supabase_auth_admin WITH PASSWORD 'postgres';
 ALTER USER supabase_storage_admin WITH PASSWORD 'postgres';
 ALTER USER supabase_replication_admin WITH PASSWORD 'postgres';
 ALTER ROLE supabase_read_only_user WITH PASSWORD 'postgres';
-ALTER ROLE supabase_admin SET search_path TO "$user",public,auth,extensions;
+ALTER ROLE capitala_admin SET search_path TO "$user",public,auth,extensions;
 """
 realtime_env_content = ""
 adminapi_yaml_content = """
@@ -125,7 +125,7 @@ GOTRUE_API_HOST=0.0.0.0
 GOTRUE_SITE_URL=
 GOTRUE_DB_DRIVER=postgres
 GOTRUE_DB_DATABASE_URL=postgres://supabase_auth_admin@localhost/postgres?sslmode=disable
-GOTRUE_JWT_ADMIN_ROLES=supabase_admin,service_role
+GOTRUE_JWT_ADMIN_ROLES=capitala_admin,service_role
 GOTRUE_JWT_AUD=authenticated
 GOTRUE_JWT_SECRET=my_jwt_secret_which_is_not_so_secret
 """
@@ -134,7 +134,7 @@ walg_config_json_content = """
   "AWS_REGION": "ap-southeast-1",
   "WALG_S3_PREFIX": "",
   "PGDATABASE": "postgres",
-  "PGUSER": "supabase_admin",
+  "PGUSER": "capitala_admin",
   "PGPORT": 5432,
   "WALG_DELTA_MAX_STEPS": 6,
   "WALG_COMPRESSION_METHOD": "lz4"
@@ -142,7 +142,7 @@ walg_config_json_content = """
 """
 anon_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFhYWFhYWFhYWFhYWFhYWFhYWFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE2OTYyMjQ5NjYsImV4cCI6MjAxMTgwMDk2Nn0.QW95aRPA-4QuLzuvaIeeoFKlJP9J2hvAIpJ3WJ6G5zo"
 service_role_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFhYWFhYWFhYWFhYWFhYWFhYWFhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTY5NjIyNDk2NiwiZXhwIjoyMDExODAwOTY2fQ.Om7yqv15gC3mLGitBmvFRB3M4IsLsX9fXzTQnFM7lu0"
-supabase_admin_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFhYWFhYWFhYWFhYWFhYWFhYWFhIiwicm9sZSI6InN1cGFiYXNlX2FkbWluIiwiaWF0IjoxNjk2MjI0OTY2LCJleHAiOjIwMTE4MDA5NjZ9.jrD3j2rBWiIx0vhVZzd1CXFv7qkAP392nBMadvXxk1c"
+capitala_admin_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFhYWFhYWFhYWFhYWFhYWFhYWFhIiwicm9sZSI6InN1cGFiYXNlX2FkbWluIiwiaWF0IjoxNjk2MjI0OTY2LCJleHAiOjIwMTE4MDA5NjZ9.jrD3j2rBWiIx0vhVZzd1CXFv7qkAP392nBMadvXxk1c"
 init_json_content = f"""
 {{
   "jwt_secret": "my_jwt_secret_which_is_not_so_secret",
@@ -155,7 +155,7 @@ init_json_content = f"""
   "logflare_gotrue_source": "",
   "anon_key": "{anon_key}",
   "service_key": "{service_role_key}",
-  "supabase_admin_key": "{supabase_admin_key}",
+  "capitala_admin_key": "{capitala_admin_key}",
   "common_name": "db.aaaaaaaaaaaaaaaaaaaa.supabase.red",
   "region": "ap-southeast-1",
   "init_database_only": false
@@ -300,7 +300,7 @@ runcmd:
             (
                 "adminapi",
                 lambda h: h.run(
-                    f"curl -sf -k --connect-timeout 30 --max-time 60 https://localhost:8085/health -H 'apikey: {supabase_admin_key}'"
+                    f"curl -sf -k --connect-timeout 30 --max-time 60 https://localhost:8085/health -H 'apikey: {capitala_admin_key}'"
                 ),
             ),
             (

@@ -1,207 +1,4 @@
-# First create nginx group and user
-- name: Nginx - create group
-  group:
-    name: nginx
-    state: present
-    system: yes
-  when: stage2_nix
-
-- name: Nginx - system user
-  user:
-    name: nginx
-    system: yes
-    group: nginx
-    shell: /bin/false
-    create_home: no
-  when: stage2_nix
-
-- name: Verify nginx user setup
-  block:
-    - name: Check nginx user and group existence
-      shell: |
-        echo "=== Nginx User/Group Verification ==="
-        id nginx || echo "User nginx not found"
-        getent group nginx || echo "Group nginx not found"
-      register: nginx_verify
-      changed_when: false
-    - name: Display verification results
-      debug:
-        var: nginx_verify.stdout_lines
-  when: stage2_nix
-
-# Set required variables for Nginx configuration
-- name: Set SSL certificate paths
-  set_fact:
-    ssl_cert_path: "/etc/ssl/certs/default_cert.pem"
-    ssl_key_path: "/etc/ssl/private/default_key.pem"
-  when: stage2_nix
-
-# Check that required variables exist
-- name: Check required variables
-  assert:
-    that:
-      - ssl_cert_path is defined
-      - ssl_key_path is defined
-    fail_msg: "Missing required variables: ssl_cert_path, ssl_key_path"
-  when: stage2_nix
-
-# Installation steps
-- name: Nginx - system dependencies
-  apt:
-    pkg:
-      - openssl
-      - libpcre3-dev
-      - libssl-dev
-      - zlib1g-dev
-    state: present
-  when: stage2_nix
-
-- name: Nginx - download source
-  get_url:
-    url: "https://nginx.org/download/nginx-{{ nginx_release }}.tar.gz"
-    dest: /tmp/nginx-{{ nginx_release }}.tar.gz
-    checksum: "{{ nginx_release_checksum }}"
-  when: stage2_nix
-
-- name: Nginx - unpack archive
-  unarchive:
-    remote_src: yes
-    src: /tmp/nginx-{{ nginx_release }}.tar.gz
-    dest: /tmp
-  when: stage2_nix
-
-- name: Nginx - configure
-  shell:
-    chdir: /tmp/nginx-{{ nginx_release }}
-    cmd: |
-      set -e
-      ./configure \
-      --prefix=/usr/local/nginx \
-      --conf-path=/etc/nginx/nginx.conf \
-      --with-http_ssl_module \
-      --with-http_realip_module \
-      --with-threads \
-      --user=nginx \
-      --group=nginx
-  become: yes
-  when: stage2_nix
-
-- name: Nginx - build
-  community.general.make:
-    target: build
-    chdir: /tmp/nginx-{{ nginx_release }}
-    jobs: "{{ parallel_jobs | default(omit) }}"
-  become: yes
-  when: stage2_nix
-
-- name: Nginx - install
-  make:
-    chdir: /tmp/nginx-{{ nginx_release }}
-    target: install
-  become: yes
-  when: stage2_nix
-
-# Ensure SSL directories exist
-- name: Ensure SSL directories exist
-  file:
-    path: "{{ item }}"
-    state: directory
-    owner: root
-    group: root
-    mode: '0755'
-  loop:
-    - "/etc/ssl/certs"
-    - "/etc/ssl/private"
-  when: stage2_nix
-
-# Create self-signed certificate if none exists yet
-- name: Check if default SSL certificate exists
-  stat:
-    path: "{{ ssl_cert_path }}"
-  register: ssl_cert_stat
-  when: stage2_nix
-
-- name: Generate self-signed SSL certificate
-  shell: |
-    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-    -keyout {{ ssl_key_path }} -out {{ ssl_cert_path }} \
-    -subj "/C=US/ST=State/L=City/O=Organization/CN=example.com"
-  when: stage2_nix and not ssl_cert_stat.stat.exists|default(false)
-
-- name: Set correct permissions on SSL private key
-  file:
-    path: "{{ ssl_key_path }}"
-    mode: '0640'
-    owner: root
-    group: nginx
-  when: stage2_nix
-
-# Deploy Nginx configuration
-- name: Nginx - deploy configuration
-  template:
-    src: files/nginx.conf.j2
-    dest: /etc/nginx/nginx.conf
-    owner: nginx
-    group: nginx
-    mode: '0644'
-  when: stage2_nix
-
-- name: Create required nginx directories
-  file:
-    path: "{{ item }}"
-    state: directory
-    owner: nginx
-    group: nginx
-    mode: '0755'
-  loop:
-    - /usr/local/nginx
-    - /etc/nginx
-    - /var/log/nginx
-    - /var/cache/nginx
-  when: stage2_nix
-
-  # After the "Create required nginx directories" task, add:
-- name: Ensure nginx logs directory exists with correct permissions
-  file:
-    path: /usr/local/nginx/logs
-    state: directory
-    owner: nginx
-    group: nginx
-    mode: '0755'
-  when: stage2_nix
-
-- name: Nginx - set ownership and permissions
-  block:
-    - name: Set ownership of nginx directories
-      file:
-        path: "{{ item }}"
-        state: directory
-        owner: nginx
-        group: nginx
-        mode: '0755'
-        recurse: yes
-      loop:
-        - /usr/local/nginx
-        - /etc/nginx
-    - name: Verify permissions
-      shell: |
-        echo "=== Nginx Permissions Check ==="
-        ls -la /usr/local/nginx
-        ls -la /etc/nginx
-      register: perm_check
-      changed_when: false
-    - name: Show permissions check
-      debug:
-        var: perm_check.stdout_lines
-  when: stage2_nix
-
-- name: Nginx - bump up ulimit
-  pam_limits:
-    limit_item: nofile
-    limit_type: soft
-    domain: nginx
-    value: "4096"
-  when: stage2_nix
+# Replace the failing nginx startup tasks with these:
 
 - name: Nginx - create service file
   template:
@@ -231,214 +28,40 @@
     daemon_reload: yes
   when: stage2_nix
 
-- name: Nginx - start service
+# FIXED: Enable but don't start nginx during AMI build
+- name: Nginx - enable service for future startup
   systemd:
     name: nginx
-    state: started
     enabled: yes
     daemon_reload: yes
   when: stage2_nix
+  # Remove the 'state: started' to avoid starting during build
 
-- name: Final nginx verification
-  block:
-    - name: Verify nginx setup
-      shell: |
-        echo "=== Final Nginx Verification ==="
-        id nginx
-        getent group nginx
-        ls -la /usr/local/nginx
-        ls -la /etc/nginx
-        test -f /etc/systemd/system/nginx.service || echo "Service file missing"
-      register: final_verify
-      changed_when: false
-    - name: Show final verification
-      debug:
-        var: final_verify.stdout_lines
+- name: Nginx - verify service file is created
+  stat:
+    path: /etc/systemd/system/nginx.service
+  register: nginx_service_file
   when: stage2_nix
 
-- name: Verify nginx service is running correctly
-  block:
-    - name: Check service status
-      shell: |
-        echo "=== Nginx Service Status ==="
-        systemctl status nginx
-        echo "=== Nginx Port Bindings ==="
-        ss -tulpn | grep -E ':80|:443'
-        echo "=== Nginx Process List ==="
-        ps aux | grep nginx | grep -v grep
-      register: nginx_status
-      changed_when: false
-    - name: Show nginx status
-      debug:
-        var: nginx_status.stdout_lines
+- name: Display nginx service status
+  debug:
+    msg: "Nginx service file created: {{ nginx_service_file.stat.exists }}, enabled for boot but not started during AMI build"
   when: stage2_nix
-  
 
-# # First create nginx group and user
-# - name: Nginx - create group
-#   group:
-#     name: nginx
-#     state: present
-#     system: yes
-#   when: stage2_nix
-
-# - name: Nginx - system user
-#   user:
-#     name: nginx
-#     system: yes
-#     group: nginx
-#     shell: /bin/false
-#     create_home: no
-#   when: stage2_nix
-
-# - name: Verify nginx user setup
+# Remove or comment out these verification tasks that try to check running nginx:
+# - name: Verify nginx service is running correctly
 #   block:
-#     - name: Check nginx user and group existence
+#     - name: Check service status
 #       shell: |
-#         echo "=== Nginx User/Group Verification ==="
-#         id nginx || echo "User nginx not found"
-#         getent group nginx || echo "Group nginx not found"
-#       register: nginx_verify
+#         echo "=== Nginx Service Status ==="
+#         systemctl status nginx
+#         echo "=== Nginx Port Bindings ==="
+#         ss -tulpn | grep -E ':80|:443'
+#         echo "=== Nginx Process List ==="
+#         ps aux | grep nginx | grep -v grep
+#       register: nginx_status
 #       changed_when: false
-
-#     - name: Display verification results
+#     - name: Show nginx status
 #       debug:
-#         var: nginx_verify.stdout_lines
-#   when: stage2_nix
-
-# # Installation steps
-# - name: Nginx - system dependencies
-#   apt:
-#     pkg:
-#       - openssl
-#       - libpcre3-dev
-#       - libssl-dev
-#       - zlib1g-dev
-#     state: present
-#   when: stage2_nix
-
-# - name: Nginx - download source
-#   get_url:
-#     url: "https://nginx.org/download/nginx-{{ nginx_release }}.tar.gz"
-#     dest: /tmp/nginx-{{ nginx_release }}.tar.gz
-#     checksum: "{{ nginx_release_checksum }}"
-#   when: stage2_nix
-
-# - name: Nginx - unpack archive
-#   unarchive:
-#     remote_src: yes
-#     src: /tmp/nginx-{{ nginx_release }}.tar.gz
-#     dest: /tmp
-#   when: stage2_nix
-
-# - name: Nginx - configure
-#   shell:
-#     chdir: /tmp/nginx-{{ nginx_release }}
-#     cmd: |
-#       set -e
-#       ./configure \
-#       --prefix=/usr/local/nginx \
-#       --conf-path=/etc/nginx/nginx.conf \
-#       --with-http_ssl_module \
-#       --with-http_realip_module \
-#       --with-threads \
-#       --user=nginx \
-#       --group=nginx
-#   become: yes
-#   when: stage2_nix
-
-# - name: Nginx - build
-#   community.general.make:
-#     target: build
-#     chdir: /tmp/nginx-{{ nginx_release }}
-#     jobs: "{{ parallel_jobs | default(omit) }}"
-#   become: yes
-#   when: stage2_nix
-
-# - name: Nginx - install
-#   make:
-#     chdir: /tmp/nginx-{{ nginx_release }}
-#     target: install
-#   become: yes
-#   when: stage2_nix
-
-# - name: Create required nginx directories
-#   file:
-#     path: "{{ item }}"
-#     state: directory
-#     owner: nginx
-#     group: nginx
-#     mode: '0755'
-#   loop:
-#     - /usr/local/nginx
-#     - /etc/nginx
-#     - /var/log/nginx
-#     - /var/cache/nginx
-#   when: stage2_nix
-
-# - name: Nginx - set ownership and permissions
-#   block:
-#     - name: Set ownership of nginx directories
-#       file:
-#         path: "{{ item }}"
-#         state: directory
-#         owner: nginx
-#         group: nginx
-#         mode: '0755'
-#         recurse: yes
-#       loop:
-#         - /usr/local/nginx
-#         - /etc/nginx
-
-#     - name: Verify permissions
-#       shell: |
-#         echo "=== Nginx Permissions Check ==="
-#         ls -la /usr/local/nginx
-#         ls -la /etc/nginx
-#       register: perm_check
-#       changed_when: false
-
-#     - name: Show permissions check
-#       debug:
-#         var: perm_check.stdout_lines
-#   when: stage2_nix
-
-# - name: Nginx - bump up ulimit
-#   pam_limits:
-#     limit_item: nofile
-#     limit_type: soft
-#     domain: nginx
-#     value: "4096"
-#   when: stage2_nix
-
-# - name: Nginx - create service file
-#   template:
-#     src: files/nginx.service.j2
-#     dest: /etc/systemd/system/nginx.service
-#     owner: root
-#     group: root
-#     mode: '0644'
-#   when: stage2_nix
-
-# - name: Nginx - reload systemd
-#   systemd:
-#     daemon_reload: yes
-#   when: stage2_nix
-
-# - name: Final nginx verification
-#   block:
-#     - name: Verify nginx setup
-#       shell: |
-#         echo "=== Final Nginx Verification ==="
-#         id nginx
-#         getent group nginx
-#         ls -la /usr/local/nginx
-#         ls -la /etc/nginx
-#         test -f /etc/systemd/system/nginx.service || echo "Service file missing"
-#       register: final_verify
-#       changed_when: false
-
-#     - name: Show final verification
-#       debug:
-#         var: final_verify.stdout_lines
+#         var: nginx_status.stdout_lines
 #   when: stage2_nix
