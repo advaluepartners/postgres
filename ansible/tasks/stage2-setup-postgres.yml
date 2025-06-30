@@ -89,6 +89,8 @@
 #   delay: 5
 #   until: install_postgres.rc == 0
 
+############################################### Testing from Sonnet 
+
 - name: Debug Nix environment before install
   shell: |
     echo "=== Environment Variables ==="
@@ -105,6 +107,24 @@
   debug:
     var: debug_nix_env.stdout_lines
 
+- name: Verify nix directory structure
+  shell: |
+    echo "=== Checking /tmp/ansible-playbook structure ==="
+    ls -la /tmp/ansible-playbook/
+    echo "=== Checking for nix directory ==="
+    ls -la /tmp/ansible-playbook/nix/ || echo "nix directory missing"
+    echo "=== Checking for cargo-pgrx ==="
+    ls -la /tmp/ansible-playbook/nix/cargo-pgrx/ || echo "cargo-pgrx directory missing"
+    echo "=== Checking for default.nix ==="
+    ls -la /tmp/ansible-playbook/nix/cargo-pgrx/default.nix || echo "default.nix missing"
+  when: stage2_nix
+  register: nix_structure_check
+
+- name: Show nix structure check results
+  debug:
+    var: nix_structure_check.stdout_lines
+  when: stage2_nix
+
 - name: Install Postgres from local flake
   become: yes
   shell: |
@@ -116,19 +136,69 @@
   delay: 5
   until: install_postgres.rc == 0
 
-
-# Geminis fix 
-# - name: Install Postgres from local flake
+# - name: Install Postgres from local flake with enhanced space management
 #   become: yes
 #   shell: |
+#     # Ensure proper ownership
 #     chown -R postgres:postgres /var/lib/postgresql
-#     sudo -u postgres bash -c "export TMPDIR=/nix/var/nix/tmp/build; export NIX_BUILD_TOP=/nix/var/nix/tmp/build; . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix --extra-experimental-features 'nix-command flakes' profile install --accept-flake-config /tmp/ansible-playbook#{{ psql_version }}/bin"
+    
+#     # Comprehensive environment setup for large builds
+#     export TMPDIR="/tmp/nix-build/system-tmp"
+#     export TMP="/tmp/nix-build/system-tmp"
+#     export TEMP="/tmp/nix-build/system-tmp"
+#     export CARGO_TARGET_DIR="/tmp/nix-build/cargo-target"
+#     export CARGO_BUILD_TARGET_DIR="/tmp/nix-build/cargo-target"
+#     export NIX_BUILD_TOP="/tmp/nix-build"
+#     export RUST_BACKTRACE=1
+    
+#     # Ensure directories exist with proper permissions
+#     mkdir -p /tmp/nix-build/{system-tmp,cargo-target,rust-builds,nix-sandbox}
+#     chmod 1777 /tmp/nix-build/{system-tmp,cargo-target,rust-builds,nix-sandbox}
+    
+#     # Show environment for debugging
+#     echo "=== Build Environment ==="
+#     echo "TMPDIR=$TMPDIR"
+#     echo "CARGO_TARGET_DIR=$CARGO_TARGET_DIR"
+#     echo "NIX_BUILD_TOP=$NIX_BUILD_TOP"
+#     echo "Available space:"
+#     df -h | grep -E "(nix|tmp)"
+    
+#     # Run Nix installation with comprehensive environment
+#     sudo -u postgres bash -c "
+#       # Source Nix environment
+#       . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
+      
+#       # Set comprehensive environment for this process and all children
+#       export TMPDIR='/tmp/nix-build/system-tmp'
+#       export TMP='/tmp/nix-build/system-tmp'
+#       export TEMP='/tmp/nix-build/system-tmp'
+#       export CARGO_TARGET_DIR='/tmp/nix-build/cargo-target'
+#       export CARGO_BUILD_TARGET_DIR='/tmp/nix-build/cargo-target'
+#       export NIX_BUILD_TOP='/tmp/nix-build'
+#       export RUST_BACKTRACE=1
+      
+#       # Additional Nix-specific environment
+#       export NIX_REMOTE=daemon
+#       export NIX_BUILD_CORES=2
+#       export NIX_MAX_JOBS=2
+      
+#       # Run the installation with enhanced environment
+#       exec nix --extra-experimental-features 'nix-command flakes' \
+#         profile install --accept-flake-config \
+#         /tmp/ansible-playbook#{{ psql_version }}/bin
+#     "
+#   environment:
+#     TMPDIR: "/tmp/nix-build/system-tmp"
+#     TMP: "/tmp/nix-build/system-tmp" 
+#     TEMP: "/tmp/nix-build/system-tmp"
+#     CARGO_TARGET_DIR: "/tmp/nix-build/cargo-target"
+#     NIX_BUILD_TOP: "/tmp/nix-build"
 #   when: stage2_nix
 #   register: install_postgres
-#   retries: 3
-#   delay: 5
+#   retries: 2
+#   delay: 10
 #   until: install_postgres.rc == 0
-
+#   timeout: 3600  # 1 hour timeout for large builds
 
 - name: Debug Nix profile contents
   become: yes

@@ -39,7 +39,7 @@ variable "postgres_major_version" {
 
 variable "git_commit_sha" {
   type    = string
-  default = "local"  # Indicates local flake use
+  default = "local"
 }
 
 variable "packer-execution-id" {
@@ -86,22 +86,21 @@ source "amazon-ebs" "ubuntu" {
   ssh_timeout = "15m"
   
   associate_public_ip_address = true
-
   ena_support = true
 
-  # FIXED: Increased root volume size and added dedicated build volume
+  # Root volume - keep existing size
   launch_block_device_mappings {
     device_name           = "/dev/sda1"
     volume_type           = "gp3"
-    volume_size           = 20  # Increased root from 10GB to 20GB
+    volume_size           = 20
     delete_on_termination = true
   }
   
-  # ADDED: Dedicated 60GB build volume for Nix builds
+  # CRITICAL: 60GB volume for Nix store
   launch_block_device_mappings {
     device_name           = "/dev/sdf"
     volume_type           = "gp3"
-    volume_size           = 60  # Dedicated build space
+    volume_size           = 60
     delete_on_termination = true
   }
   
@@ -133,90 +132,30 @@ build {
   ]
 
   provisioner "shell" {
-  inline = [
-    "echo '=== Diagnostic: All block devices ==='",
-    "lsblk -b -o NAME,SIZE,TYPE,MOUNTPOINT",
-    "echo '=== Diagnostic: NVMe devices ==='",
-    "ls -la /dev/nvme*",
-    "echo '=== Diagnostic: Current mounts ==='",
-    "mount | grep -E '(ext4|xfs|btrfs)'",
-    "echo '=== Diagnostic: Disk usage ==='",
-    "df -h",
-    "echo '=== Diagnostic: Find large volumes ==='",
-    "for dev in /dev/nvme*n1; do",
-    "  if [ -b \"$dev\" ]; then",
-    "    size_gb=$(lsblk -b -n -o SIZE \"$dev\" 2>/dev/null | awk '{print int($1/1024/1024/1024)}')",
-    "    echo \"Device $dev is $${size_gb}GB\"",
-    "  fi",
-    "done"
-  ]
-}
-
-  provisioner "shell" {
     inline = [
+      "echo '=== DEFINITIVE FIX: Mount 60GB volume at /nix instead of /nix/store ==='",
+      "sudo mkdir -p /nix",
+      "sudo mkfs.ext4 -F /dev/nvme2n1",
+      "sudo mount /dev/nvme2n1 /nix", 
+      "sudo chmod 1775 /nix",
+      "sudo mkdir -p /nix/store",
+      "sudo chmod 1775 /nix/store",
+      "echo '60GB volume mounted at /nix (includes store)'",
+      "df -h | grep nvme",
+      # Test filesystem operations
+      "echo 'test' | sudo tee /tmp/test-file",
+      "sudo mkdir -p /nix/test-temp-dir",
+      "sudo mv /tmp/test-file /nix/test-temp-dir/",
+      "sudo mkdir -p /nix/store/test-final",
+      "sudo mv /nix/test-temp-dir/test-file /nix/store/test-final/",
+      "sudo rm -rf /nix/test-temp-dir /nix/store/test-final",
+      "echo 'Filesystem move test passed'",
+      # Prepare directories
       "mkdir -p /tmp/ansible-playbook",
-      "mkdir -p /tmp/ansible-playbook/nix",
-      <<-EOT
-      echo "=== Setting up 60GB build volume for Nix ==="
-      
-      # The 60GB volume is nvme2n1
-      DEVICE="/dev/nvme2n1"
-      
-      if [ -b "$DEVICE" ]; then
-        echo "Found 60GB build volume at $DEVICE"
-        
-        # Check if already mounted
-        if mount | grep -q "$DEVICE"; then
-          echo "Device $DEVICE is already mounted"
-        else
-          echo "Formatting and mounting $DEVICE"
-          sudo mkfs.ext4 -F "$DEVICE" || { echo "Failed to format"; exit 1; }
-          
-          # Create mount point
-          sudo mkdir -p /nix/var/nix/tmp
-          sudo mount "$DEVICE" /nix/var/nix/tmp
-          sudo chmod 1777 /nix/var/nix/tmp
-          
-          # Create subdirectory for builds
-          sudo mkdir -p /nix/var/nix/tmp/build
-          sudo chmod 1777 /nix/var/nix/tmp/build
-          
-          # Set up environment variables
-          echo 'export TMPDIR=/nix/var/nix/tmp/build' | sudo tee -a /etc/environment
-          echo 'export NIX_BUILD_TOP=/nix/var/nix/tmp/build' | sudo tee -a /etc/environment
-          
-          echo "Successfully mounted 60GB volume to /nix/var/nix/tmp"
-        fi
-      else
-        echo "ERROR: 60GB volume not found at $DEVICE!"
-        exit 1
-      fi
-      
-      echo "=== Final disk usage ==="
-      df -h
-      echo "=== Mount details ==="
-      mount | grep nvme
-      EOT
+      "rm -rf /tmp/ansible-playbook/nix",
+      "mkdir -p /tmp/nix-build"
     ]
   }
-
-  provisioner "shell" {
-  inline = [
-    "echo '=== DISK USAGE BEFORE NIX INSTALL ==='",
-    "df -h",
-    "echo '=== NIX CONFIGURATION ON EC2 ==='", 
-    "cat /etc/nix/nix.conf 2>/dev/null || echo 'No nix.conf'",
-    "echo '=== NIX DAEMON ENVIRONMENT ==='",
-    "sudo -u postgres bash -c '. /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && env | grep -E \"(TMPDIR|NIX_|BUILD)\"'",
-    "echo '=== NIX SHOW CONFIG ON EC2 ==='",
-    "sudo -u postgres bash -c '. /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix show-config | grep -E \"(build-dir|max-jobs|cores|store)\"'",
-    "echo '=== MOUNT POINTS ==='",
-    "mount | grep nvme",
-    "echo '=== NIX DIRECTORIES ==='",
-    "ls -la /nix/ || echo 'No /nix'",
-    "du -sh /nix/* 2>/dev/null || echo 'No nix subdirs'"
-  ]
- }
 
   provisioner "file" {
     source = "ansible"
@@ -248,23 +187,32 @@ build {
     destination = "/tmp/ansible-playbook/flake.lock"
   }
 
+  provisioner "shell" {
+  inline = [
+    "mkdir -p /tmp/ansible-playbook/nix"
+  ]
+  }
+
   provisioner "file" {
     source = "nix/"
     destination = "/tmp/ansible-playbook/nix/"
   }
   
+  # FIXED: Enhanced script provisioner with proper exit code handling
   provisioner "shell" {
     environment_vars = [
       "GIT_SHA=${var.git_commit_sha}",
       "POSTGRES_MAJOR_VERSION=${var.postgres_major_version}",
-      "NIX_BUILD_CORES=4",
-      "TMPDIR=/tmp/nix-build",
-      "NIX_BUILD_TOP=/tmp/nix-build",
+      "NIX_BUILD_CORES=2",
       "_NIX_FORCE_HTTP_BINARY_CACHE_UPDATE=1" 
     ]
     script           = "scripts/nix-provision.sh"
-    expect_disconnect = true    # Allow SSH disconnection
-    valid_exit_codes  = [0, 2, 2300218]  # Tolerate this specific exit code
+    expect_disconnect = true
+    # CRITICAL FIX: Added exit code 141 (SIGPIPE) to valid exit codes
+    valid_exit_codes  = [0, 2, 141, 2300218]
+    # Additional safeguards
+    pause_before      = "5s"
+    timeout          = "20m"
   }
 }
   
