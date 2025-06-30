@@ -310,7 +310,92 @@
         executable: /bin/bash
       when: stage2_nix
 
-    - name: Setup Apache AGE extension
+      # Add this task BEFORE the "Setup Apache AGE extension" task
+# in ansible/tasks/stage2-setup-postgres.yml
+
+- name: Ensure AGE extension files are properly copied (explicit fix)
+  block:
+    - name: Create AGE extension directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: '0755'
+      loop:
+        - "/usr/lib/postgresql/lib"
+        - "/usr/lib/postgresql/share/postgresql/extension"
+
+    - name: Copy AGE shared library explicitly
+      shell: |
+        if [ -f "/var/lib/postgresql/.nix-profile/lib/age.so" ]; then
+          cp -f "/var/lib/postgresql/.nix-profile/lib/age.so" "/usr/lib/postgresql/lib/"
+          chmod 755 "/usr/lib/postgresql/lib/age.so"
+          chown postgres:postgres "/usr/lib/postgresql/lib/age.so"
+          echo "AGE library copied successfully"
+        else
+          echo "ERROR: AGE library not found in Nix profile"
+          exit 1
+        fi
+      register: age_lib_copy
+      failed_when: age_lib_copy.rc != 0
+
+    - name: Copy AGE control file explicitly  
+      shell: |
+        if [ -f "/var/lib/postgresql/.nix-profile/share/postgresql/extension/age.control" ]; then
+          cp -f "/var/lib/postgresql/.nix-profile/share/postgresql/extension/age.control" "/usr/lib/postgresql/share/postgresql/extension/"
+          chmod 644 "/usr/lib/postgresql/share/postgresql/extension/age.control"
+          chown postgres:postgres "/usr/lib/postgresql/share/postgresql/extension/age.control"
+          echo "AGE control file copied successfully"
+        else
+          echo "ERROR: AGE control file not found in Nix profile"
+          exit 1
+        fi
+      register: age_control_copy
+      failed_when: age_control_copy.rc != 0
+
+    - name: Copy AGE SQL files explicitly
+      shell: |
+        sql_files_found=0
+        for sql_file in /var/lib/postgresql/.nix-profile/share/postgresql/extension/age*.sql; do
+          if [ -f "$sql_file" ]; then
+            cp -f "$sql_file" "/usr/lib/postgresql/share/postgresql/extension/"
+            chmod 644 "/usr/lib/postgresql/share/postgresql/extension/$(basename "$sql_file")"
+            chown postgres:postgres "/usr/lib/postgresql/share/postgresql/extension/$(basename "$sql_file")"
+            echo "Copied $(basename "$sql_file")"
+            sql_files_found=$((sql_files_found + 1))
+          fi
+        done
+        
+        if [ $sql_files_found -eq 0 ]; then
+          echo "ERROR: No AGE SQL files found in Nix profile"
+          exit 1
+        else
+          echo "Successfully copied $sql_files_found AGE SQL files"
+        fi
+      register: age_sql_copy
+      failed_when: age_sql_copy.rc != 0
+
+    - name: Verify AGE extension files installation
+      shell: |
+        echo "=== AGE Extension Files Verification ==="
+        echo "Library file:"
+        ls -la /usr/lib/postgresql/lib/age.so
+        echo "Control file:"
+        ls -la /usr/lib/postgresql/share/postgresql/extension/age.control
+        echo "SQL files:"
+        ls -la /usr/lib/postgresql/share/postgresql/extension/age*.sql
+        echo "Control file content:"
+        cat /usr/lib/postgresql/share/postgresql/extension/age.control
+      register: age_verification
+      
+    - name: Display AGE verification results
+      debug:
+        var: age_verification.stdout_lines
+
+      when: stage2_nix and postgresql_major_version == "15"
+      become: yes
+    - name: Setup Apache AGE extension (FIXED VERSION)
       become: yes
       become_user: postgres
       shell: |
@@ -322,18 +407,40 @@
           sleep 1
         done
         
-        # Create AGE extension with error handling
-        psql -d postgres -c "CREATE EXTENSION IF NOT EXISTS age CASCADE;" || {
-          echo "Failed to create AGE extension, checking dependencies..."
-          psql -d postgres -c "\dx"
+        # Verify AGE files exist before trying to create extension
+        echo "=== Verifying AGE extension files ==="
+        if [ ! -f "/usr/lib/postgresql/lib/age.so" ]; then
+          echo "ERROR: age.so not found"
+          ls -la /usr/lib/postgresql/lib/ | grep age || echo "No AGE files in lib directory"
           exit 1
-        }
+        fi
+        
+        if [ ! -f "/usr/lib/postgresql/share/postgresql/extension/age.control" ]; then
+          echo "ERROR: age.control not found"
+          ls -la /usr/lib/postgresql/share/postgresql/extension/ | grep age || echo "No AGE files in extension directory"  
+          exit 1
+        fi
+        
+        echo "AGE files verified successfully"
+        echo "Control file content:"
+        cat /usr/lib/postgresql/share/postgresql/extension/age.control
+        
+        # Create AGE extension with detailed error handling
+        echo "Creating AGE extension..."
+        if ! psql -d postgres -c "CREATE EXTENSION IF NOT EXISTS age CASCADE;"; then
+          echo "Failed to create AGE extension, checking available extensions..."
+          psql -d postgres -c "SELECT name FROM pg_available_extensions WHERE name LIKE '%age%';"
+          psql -d postgres -c "\dx"
+          echo "Checking extension directory contents:"
+          ls -la /usr/lib/postgresql/share/postgresql/extension/ | grep age
+          exit 1
+        fi
         
         # Load AGE
-        psql -d postgres -c "LOAD 'age';" || {
+        if ! psql -d postgres -c "LOAD 'age';"; then
           echo "Failed to load AGE extension"
           exit 1
-        }
+        fi
         
         # Set search path only if ag_catalog exists
         psql -d postgres -c "DO \$\$ 
@@ -349,9 +456,9 @@
         # Verify AGE installation
         psql -d postgres -c "SELECT extname, extversion FROM pg_extension WHERE extname = 'age';"
       when: stage2_nix and postgresql_major_version == "15"
-      register: age_setup
-      changed_when: "'CREATE EXTENSION' in age_setup.stdout"
-      failed_when: age_setup.rc != 0
+      register: age_setup_fixed
+      changed_when: "'CREATE EXTENSION' in age_setup_fixed.stdout"
+      failed_when: age_setup_fixed.rc != 0
     
     # Be careful, if already created, this won't show.
     # Maybe check for 'LOAD' or 'SET' in stdout too, or ignore changed_when for this.
