@@ -136,70 +136,6 @@
   delay: 5
   until: install_postgres.rc == 0
 
-# - name: Install Postgres from local flake with enhanced space management
-#   become: yes
-#   shell: |
-#     # Ensure proper ownership
-#     chown -R postgres:postgres /var/lib/postgresql
-    
-#     # Comprehensive environment setup for large builds
-#     export TMPDIR="/tmp/nix-build/system-tmp"
-#     export TMP="/tmp/nix-build/system-tmp"
-#     export TEMP="/tmp/nix-build/system-tmp"
-#     export CARGO_TARGET_DIR="/tmp/nix-build/cargo-target"
-#     export CARGO_BUILD_TARGET_DIR="/tmp/nix-build/cargo-target"
-#     export NIX_BUILD_TOP="/tmp/nix-build"
-#     export RUST_BACKTRACE=1
-    
-#     # Ensure directories exist with proper permissions
-#     mkdir -p /tmp/nix-build/{system-tmp,cargo-target,rust-builds,nix-sandbox}
-#     chmod 1777 /tmp/nix-build/{system-tmp,cargo-target,rust-builds,nix-sandbox}
-    
-#     # Show environment for debugging
-#     echo "=== Build Environment ==="
-#     echo "TMPDIR=$TMPDIR"
-#     echo "CARGO_TARGET_DIR=$CARGO_TARGET_DIR"
-#     echo "NIX_BUILD_TOP=$NIX_BUILD_TOP"
-#     echo "Available space:"
-#     df -h | grep -E "(nix|tmp)"
-    
-#     # Run Nix installation with comprehensive environment
-#     sudo -u postgres bash -c "
-#       # Source Nix environment
-#       . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
-      
-#       # Set comprehensive environment for this process and all children
-#       export TMPDIR='/tmp/nix-build/system-tmp'
-#       export TMP='/tmp/nix-build/system-tmp'
-#       export TEMP='/tmp/nix-build/system-tmp'
-#       export CARGO_TARGET_DIR='/tmp/nix-build/cargo-target'
-#       export CARGO_BUILD_TARGET_DIR='/tmp/nix-build/cargo-target'
-#       export NIX_BUILD_TOP='/tmp/nix-build'
-#       export RUST_BACKTRACE=1
-      
-#       # Additional Nix-specific environment
-#       export NIX_REMOTE=daemon
-#       export NIX_BUILD_CORES=2
-#       export NIX_MAX_JOBS=2
-      
-#       # Run the installation with enhanced environment
-#       exec nix --extra-experimental-features 'nix-command flakes' \
-#         profile install --accept-flake-config \
-#         /tmp/ansible-playbook#{{ psql_version }}/bin
-#     "
-#   environment:
-#     TMPDIR: "/tmp/nix-build/system-tmp"
-#     TMP: "/tmp/nix-build/system-tmp" 
-#     TEMP: "/tmp/nix-build/system-tmp"
-#     CARGO_TARGET_DIR: "/tmp/nix-build/cargo-target"
-#     NIX_BUILD_TOP: "/tmp/nix-build"
-#   when: stage2_nix
-#   register: install_postgres
-#   retries: 2
-#   delay: 10
-#   until: install_postgres.rc == 0
-#   timeout: 3600  # 1 hour timeout for large builds
-
 - name: Debug Nix profile contents
   become: yes
   shell: |
@@ -262,17 +198,31 @@
     - stage2_nix
     - ansible_architecture != 'aarch64'
 
-- name: Install pg_prove from nix binary cache
+- name: Install pg_prove from local flake
   become: yes
   shell: |
-    sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile install github:supabase/postgres/{{ git_commit_sha }}#pg_prove"
+    sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile install /tmp/ansible-playbook#pg_prove"
   when: stage2_nix
+  register: install_pg_prove
+  retries: 3
+  delay: 5
+  until: install_pg_prove.rc == 0
 
-- name: Install supabase-groonga from nix binary cache
+- name: Install supabase-groonga from local flake  
   become: yes
   shell: |
-    sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile install github:supabase/postgres/{{ git_commit_sha }}#supabase_groonga"
+    sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile install /tmp/ansible-playbook#supabase_groonga"
   when: stage2_nix and ansible_architecture != 'aarch64'
+  register: install_supabase_groonga
+  retries: 3
+  delay: 5
+  until: install_supabase_groonga.rc == 0
+
+- name: Skip supabase-groonga on ARM64 (using local alternative)
+  debug:
+    msg: "Skipping supabase-groonga installation on ARM64 - using local supabase_groonga package"
+  when: stage2_nix and ansible_architecture == 'aarch64'
+
 
 - name: Skip supabase-groonga on ARM
   debug:
@@ -286,55 +236,20 @@
       include_dir: "/usr/include/aarch64-linux-gnu"
   when: ansible_architecture == 'arm64'
 
-# - name: Set up PostgreSQL directories for ARM64
-#   file:
-#     path: "{{ item }}"
-#     state: directory
-#     owner: postgres
-#     group: postgres
-#     mode: '0755'
-#   with_items:
-#     - "/usr/lib/postgresql/bin"
-#     - "/usr/lib/postgresql/lib"
-#     - "/usr/lib/postgresql/include"
-#     - "/usr/lib/postgresql/share"
-#   when: stage2_nix
-
-# - name: Ensure required PostgreSQL directories exist
-#   file:
-#     path: "{{ item }}"
-#     state: directory
-#     owner: postgres
-#     group: postgres
-#     mode: '0755'
-#   with_items:
-#     - "/usr/lib/postgresql/bin"
-#     - "/usr/lib/postgresql/share"
-#   when: stage2_nix
-
-# - name: Create ARM64 specific symlinks
-#   file:
-#     src: "{{ item.src }}"
-#     dest: "{{ item.dest }}"
-#     state: link
-#   with_items:
-#     - { src: "/var/lib/postgresql/.nix-profile/lib/aarch64-linux-gnu", dest: "/usr/lib/postgresql/lib" }
-#     - { src: "/var/lib/postgresql/.nix-profile/include", dest: "/usr/lib/postgresql/include" }
-#   when: stage2_nix
-
-- name: Install debug symbols for postgres version
+- name: Install debug symbols from local flake (optional)
   become: yes
   shell: |
-    sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile install github:supabase/postgres/{{ git_commit_sha }}#{{ postgresql_version }}_debug"
+    sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile install /tmp/ansible-playbook#postgresql_{{ postgresql_major_version }}_debug"
   when:
     - stage2_nix
     - ansible_architecture != 'aarch64'
+    - install_debug_symbols | default(false)  # Make this optional
+  register: install_debug_symbols_result
+  retries: 3
+  delay: 5
+  until: install_debug_symbols_result.rc == 0
+  ignore_errors: yes  # Don't fail build if debug symbols fail
 
-# - name: Install source files for postgresql version
-#   become: yes
-#   shell: |
-#     sudo -u postgres bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile install github:supabase/postgres/{{ git_commit_sha }}#{{postgresql_version}}_src"
-#   when: stage2_nix
   
 - name: Set ownership and permissions for /etc/ssl/private
   become: yes

@@ -148,7 +148,7 @@
       become: yes
       become_user: postgres
       shell:
-        cmd: /usr/lib/postgresql/bin/psql --username=supabase_admin -d postgres -c "create role postgres superuser login; alter database postgres owner to postgres;"
+        cmd: /usr/lib/postgresql/bin/psql --username=capitala_admin -d postgres -c "create role postgres superuser login; alter database postgres owner to postgres;"
       when: debpkg_mode or stage2_nix
 
     - name: Execute init SQL files
@@ -196,8 +196,8 @@
           import_tasks: tasks/internal/postgresql-prestart.yml
         # - name: Setup optimizations
         #   import_tasks: tasks/internal/optimizations.yml
-        # - name: Setup admin-api
-        #   import_tasks: tasks/internal/admin-api.yml
+        - name: Setup admin-api
+          import_tasks: tasks/internal/admin-api.yml
         - name: Install salt
           import_tasks: tasks/internal/install-salt.yml
         - name: Setup pg_egress_collect
@@ -309,20 +309,6 @@
       args:
         executable: /bin/bash
       when: stage2_nix
-
-    # - name: Setup Apache AGE extension
-    #   become: yes
-    #   become_user: postgres
-    #   shell: |
-    #     psql -d postgres -c "CREATE EXTENSION IF NOT EXISTS age;"
-    #     psql -d postgres -c "LOAD 'age';"
-    #     # Only set search_path if ag_catalog schema exists
-    #     psql -d postgres -c "DO \$\$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = 'ag_catalog') THEN EXECUTE 'SET search_path = ag_catalog, \"\$user\", public'; END IF; END \$\$;"
-    #   when: stage2_nix
-    #   register: age_setup
-    #   changed_when: "'CREATE EXTENSION' in age_setup.stdout" 
-
-    # TESTING THIS NEW CODE FROM OPUS 
 
     - name: Setup Apache AGE extension
       become: yes
