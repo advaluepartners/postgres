@@ -1,6 +1,6 @@
 - hosts: all
   become: yes
-  gather_facts: yes  # Add this line
+  gather_facts: yes
 
   pre_tasks:
     - import_tasks: tasks/setup-system.yml
@@ -38,6 +38,7 @@
 
     - set_fact:
         parallel_jobs: 16
+        
     - name: Set system state for user management
       block:
         - name: Ensure nscd is installed (if using glibc)
@@ -59,13 +60,12 @@
     - name: Install Postgres from source
       import_tasks: tasks/setup-postgres.yml
 
-
     - name: Install PgBouncer
       import_tasks: tasks/setup-pgbouncer.yml
       tags:
         - install-pgbouncer
         - install-supabase-internal
-      when:  debpkg_mode or nixpkg_mode or stage2_nix
+      when: debpkg_mode or nixpkg_mode or stage2_nix
 
     - name: Install WAL-G
       import_tasks: tasks/setup-wal-g.yml
@@ -76,7 +76,7 @@
       tags:
         - install-gotrue
         - install-supabase-internal
-      when: debpkg_mode or nixpkg_mode or stage2_nix  # Add stage2_nix
+      when: debpkg_mode or nixpkg_mode or stage2_nix
       
     - name: Install PostgREST
       import_tasks: tasks/setup-postgrest.yml
@@ -91,7 +91,7 @@
       import_tasks: tasks/setup-envoy.yml
       tags:
         - install-supabase-internal
-      when: debpkg_mode or nixpkg_mode or stage2_nix  # Add stage2_nix
+      when: debpkg_mode or nixpkg_mode or stage2_nix
 
     - name: Install Kong
       import_tasks: tasks/setup-kong.yml
@@ -115,8 +115,7 @@
       import_tasks: tasks/setup-supabase-internal.yml
       tags:
         - install-supabase-internal
-      when: debpkg_mode or nixpkg_mode  or stage2_nix
-
+      when: debpkg_mode or nixpkg_mode or stage2_nix
 
     - name: Fix IPv6 NDisc issues
       import_tasks: tasks/fix_ipv6_ndisc.yml
@@ -194,8 +193,6 @@
           import_tasks: tasks/internal/supautils.yml
         - name: Setup postgresql-prestart
           import_tasks: tasks/internal/postgresql-prestart.yml
-        # - name: Setup optimizations
-        #   import_tasks: tasks/internal/optimizations.yml
         - name: Setup admin-api
           import_tasks: tasks/internal/admin-api.yml
         - name: Install salt
@@ -212,8 +209,6 @@
       tags:
         - install-supabase-internal
 
-    # Install EC2 instance connect
-    # Only for AWS images
     - name: install EC2 instance connect
       become: yes
       apt:
@@ -222,7 +217,6 @@
       tags:
         - aws-only
 
-    # Install this at the end to prevent it from kicking in during the apt process, causing conflicts
     - name: Install security tools
       become: yes
       apt:
@@ -242,7 +236,6 @@
         owner: postgres
         group: postgres
         mode: '2775'
-
       when: stage2_nix
 
     - name: Check if PostgreSQL is running
@@ -264,7 +257,6 @@
           if ps -p $PID > /dev/null 2>&1; then
             echo "PostgreSQL process $PID is still running. Force killing..."
             kill -9 $PID
-            # Give the OS a moment to reap the process
             sleep 2
           fi
           echo "Removing stale PID file"
@@ -293,109 +285,18 @@
       become: yes
       become_user: postgres
       ansible.builtin.shell: |
-        # Export environment variables inline
-        # export LANG=en_US.UTF-8
-        # export LANGUAGE=en_US:en
-        # export LC_ALL=en_US.UTF-8
-        # export LC_CTYPE=en_US.UTF-8
         export LANG=C
         export LANGUAGE=C
         export LC_ALL=C
         export LC_CTYPE=C
         export LOCALE_ARCHIVE=/usr/lib/locale/locale-archive
-        # Use the POSIX "." operator instead of "source"
         . /var/lib/postgresql/.bashrc
         /usr/lib/postgresql/bin/pg_ctl -D /var/lib/postgresql/data start
       args:
         executable: /bin/bash
       when: stage2_nix
 
-      # Add this task BEFORE the "Setup Apache AGE extension" task
-# in ansible/tasks/stage2-setup-postgres.yml
-
-- name: Ensure AGE extension files are properly copied (explicit fix)
-  block:
-    - name: Create AGE extension directories
-      file:
-        path: "{{ item }}"
-        state: directory
-        owner: postgres
-        group: postgres
-        mode: '0755'
-      loop:
-        - "/usr/lib/postgresql/lib"
-        - "/usr/lib/postgresql/share/postgresql/extension"
-
-    - name: Copy AGE shared library explicitly
-      shell: |
-        if [ -f "/var/lib/postgresql/.nix-profile/lib/age.so" ]; then
-          cp -f "/var/lib/postgresql/.nix-profile/lib/age.so" "/usr/lib/postgresql/lib/"
-          chmod 755 "/usr/lib/postgresql/lib/age.so"
-          chown postgres:postgres "/usr/lib/postgresql/lib/age.so"
-          echo "AGE library copied successfully"
-        else
-          echo "ERROR: AGE library not found in Nix profile"
-          exit 1
-        fi
-      register: age_lib_copy
-      failed_when: age_lib_copy.rc != 0
-
-    - name: Copy AGE control file explicitly  
-      shell: |
-        if [ -f "/var/lib/postgresql/.nix-profile/share/postgresql/extension/age.control" ]; then
-          cp -f "/var/lib/postgresql/.nix-profile/share/postgresql/extension/age.control" "/usr/lib/postgresql/share/postgresql/extension/"
-          chmod 644 "/usr/lib/postgresql/share/postgresql/extension/age.control"
-          chown postgres:postgres "/usr/lib/postgresql/share/postgresql/extension/age.control"
-          echo "AGE control file copied successfully"
-        else
-          echo "ERROR: AGE control file not found in Nix profile"
-          exit 1
-        fi
-      register: age_control_copy
-      failed_when: age_control_copy.rc != 0
-
-    - name: Copy AGE SQL files explicitly
-      shell: |
-        sql_files_found=0
-        for sql_file in /var/lib/postgresql/.nix-profile/share/postgresql/extension/age*.sql; do
-          if [ -f "$sql_file" ]; then
-            cp -f "$sql_file" "/usr/lib/postgresql/share/postgresql/extension/"
-            chmod 644 "/usr/lib/postgresql/share/postgresql/extension/$(basename "$sql_file")"
-            chown postgres:postgres "/usr/lib/postgresql/share/postgresql/extension/$(basename "$sql_file")"
-            echo "Copied $(basename "$sql_file")"
-            sql_files_found=$((sql_files_found + 1))
-          fi
-        done
-        
-        if [ $sql_files_found -eq 0 ]; then
-          echo "ERROR: No AGE SQL files found in Nix profile"
-          exit 1
-        else
-          echo "Successfully copied $sql_files_found AGE SQL files"
-        fi
-      register: age_sql_copy
-      failed_when: age_sql_copy.rc != 0
-
-    - name: Verify AGE extension files installation
-      shell: |
-        echo "=== AGE Extension Files Verification ==="
-        echo "Library file:"
-        ls -la /usr/lib/postgresql/lib/age.so
-        echo "Control file:"
-        ls -la /usr/lib/postgresql/share/postgresql/extension/age.control
-        echo "SQL files:"
-        ls -la /usr/lib/postgresql/share/postgresql/extension/age*.sql
-        echo "Control file content:"
-        cat /usr/lib/postgresql/share/postgresql/extension/age.control
-      register: age_verification
-      
-    - name: Display AGE verification results
-      debug:
-        var: age_verification.stdout_lines
-
-      when: stage2_nix and postgresql_major_version == "15"
-      become: yes
-    - name: Setup Apache AGE extension (FIXED VERSION)
+    - name: Setup Apache AGE extension (FIXED)
       become: yes
       become_user: postgres
       shell: |
@@ -459,9 +360,6 @@
       register: age_setup_fixed
       changed_when: "'CREATE EXTENSION' in age_setup_fixed.stdout"
       failed_when: age_setup_fixed.rc != 0
-    
-    # Be careful, if already created, this won't show.
-    # Maybe check for 'LOAD' or 'SET' in stdout too, or ignore changed_when for this.
 
     - name: Setup and add extensions
       import_tasks: tasks/setup-extensions.yml
@@ -522,18 +420,6 @@
         final_system_check.stdout is not search('ssl-cert') or
         final_system_check.stdout is not search('pgbouncer')
 
-    - name: Display final system state
-      debug:
-        var: final_system_check.stdout_lines
-
-    - name: Ensure pgbouncer has correct group memberships
-      fail:
-        msg: "pgbouncer user is missing required group memberships"
-      when: >
-        final_system_check.stdout is not search('postgres') or
-        final_system_check.stdout is not search('ssl-cert') or
-        final_system_check.stdout is not search('pgbouncer')
-
     - name: Run osquery permission checks
       become: yes
       shell: |
@@ -551,3 +437,978 @@
       shell: |
         sudo -u ubuntu bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix-collect-garbage -d"
       when: stage2_nix
+#  second oldest 
+# - hosts: all
+#   become: yes
+#   gather_facts: yes
+
+#   pre_tasks:
+#     - import_tasks: tasks/setup-system.yml
+#   vars_files:
+#     - ./vars.yml
+
+#   vars:
+#     sql_files:
+#       - {
+#           source: "pgbouncer_config/pgbouncer_auth_schema.sql",
+#           dest: "00-schema.sql",
+#         }
+#       - { source: "stat_extension.sql", dest: "01-extension.sql" }
+    
+#   environment:
+#     PATH: /usr/lib/postgresql/bin:{{ ansible_env.PATH }}
+
+#   tasks:
+#     # New tasks to ensure git is installed and clone the repository
+#     - name: Ensure git is installed
+#       apt:
+#         name: git
+#         state: present
+
+#     # - name: Clone advaluepartners/postgres repo
+#     #   git:
+#     #     repo: 'https://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@github.com/advaluepartners/postgres.git'
+#     #     dest: /usr/local/src/advaluepartners-postgres
+#     #     version: main
+  
+#     - set_fact:
+#         supabase_internal: true
+#       tags:
+#         - install-supabase-internal
+
+#     - set_fact:
+#         parallel_jobs: 16
+        
+#     - name: Set system state for user management
+#       block:
+#         - name: Ensure nscd is installed (if using glibc)
+#           apt:
+#             name: nscd
+#             state: present
+#           when: ansible_os_family == "Debian"
+#           ignore_errors: yes
+
+#         - name: Clear system user/group cache
+#           shell: |
+#             if command -v nscd >/dev/null 2>&1; then
+#               nscd -i group
+#               nscd -i passwd
+#             fi
+#             systemctl daemon-reload
+#           ignore_errors: yes
+
+#     - name: Install Postgres from source
+#       import_tasks: tasks/setup-postgres.yml
+
+#     - name: Install PgBouncer
+#       import_tasks: tasks/setup-pgbouncer.yml
+#       tags:
+#         - install-pgbouncer
+#         - install-supabase-internal
+#       when: debpkg_mode or nixpkg_mode or stage2_nix
+
+#     - name: Install WAL-G
+#       import_tasks: tasks/setup-wal-g.yml
+#       when: debpkg_mode or nixpkg_mode or stage2_nix
+
+#     - name: Install Gotrue
+#       import_tasks: tasks/setup-gotrue.yml
+#       tags:
+#         - install-gotrue
+#         - install-supabase-internal
+#       when: debpkg_mode or nixpkg_mode or stage2_nix
+      
+#     - name: Install PostgREST
+#       import_tasks: tasks/setup-postgrest.yml
+#       vars:
+#         postgresql_major: "{{ postgresql_major_version }}"
+#       tags:
+#         - install-postgrest
+#         - install-supabase-internal
+#       when: debpkg_mode or nixpkg_mode or stage2_nix
+
+#     - name: Install Envoy
+#       import_tasks: tasks/setup-envoy.yml
+#       tags:
+#         - install-supabase-internal
+#       when: debpkg_mode or nixpkg_mode or stage2_nix
+
+#     - name: Install Kong
+#       import_tasks: tasks/setup-kong.yml
+#       tags:
+#         - install-supabase-internal
+#       when: debpkg_mode or nixpkg_mode or stage2_nix
+
+#     - name: Install nginx
+#       import_tasks: tasks/setup-nginx.yml
+#       tags:
+#         - install-supabase-internal
+#       when: debpkg_mode or nixpkg_mode or stage2_nix
+
+#     - name: Install Vector
+#       import_tasks: tasks/setup-vector.yml
+#       tags:
+#         - install-supabase-internal
+#       when: debpkg_mode or nixpkg_mode or stage2_nix
+
+#     - name: Install Supabase specific content
+#       import_tasks: tasks/setup-supabase-internal.yml
+#       tags:
+#         - install-supabase-internal
+#       when: debpkg_mode or nixpkg_mode or stage2_nix
+
+#     - name: Fix IPv6 NDisc issues
+#       import_tasks: tasks/fix_ipv6_ndisc.yml
+#       tags:
+#         - install-supabase-internal
+#       when: debpkg_mode or nixpkg_mode
+
+#     - name: Start Postgres Database without Systemd
+#       become: yes
+#       become_user: postgres
+#       shell:
+#         cmd: /usr/lib/postgresql/bin/pg_ctl -D /var/lib/postgresql/data start
+#       when: debpkg_mode
+
+#     - name: Adjust APT update intervals
+#       copy:
+#         src: files/apt_periodic
+#         dest: /etc/apt/apt.conf.d/10periodic
+#       when: debpkg_mode or nixpkg_mode
+      
+#     - name: Transfer init SQL files
+#       copy:
+#         src: files/{{ item.source }}
+#         dest: /tmp/{{ item.dest }}
+#       loop: "{{ sql_files }}"
+#       when: debpkg_mode or stage2_nix
+
+#     - name: Create postgres role
+#       become: yes
+#       become_user: postgres
+#       shell:
+#         cmd: /usr/lib/postgresql/bin/psql --username=capitala_admin -d postgres -c "create role postgres superuser login; alter database postgres owner to postgres;"
+#       when: debpkg_mode or stage2_nix
+
+#     - name: Execute init SQL files
+#       become: yes
+#       become_user: postgres
+#       shell:
+#         cmd: /usr/lib/postgresql/bin/psql -f /tmp/{{ item.dest }}
+#       loop: "{{ sql_files }}"
+#       when: debpkg_mode or stage2_nix
+
+#     - name: Delete SQL scripts
+#       file:
+#         path: /tmp/{{ item.dest }}
+#         state: absent
+#       loop: "{{ sql_files }}"
+#       when: debpkg_mode or stage2_nix
+
+#     - name: First boot optimizations
+#       import_tasks: tasks/internal/optimizations.yml
+#       tags:
+#         - install-supabase-internal
+#       when: debpkg_mode or stage2_nix
+      
+#     - name: Finalize AMI
+#       import_tasks: tasks/finalize-ami.yml
+#       tags:
+#         - install-supabase-internal
+#       when: debpkg_mode or nixpkg_mode
+      
+#     - name: Enhance fail2ban
+#       import_tasks: tasks/setup-fail2ban.yml
+#       when: debpkg_mode or nixpkg_mode
+
+#     - name: Install Admin API
+#       import_tasks: tasks/internal/admin-api.yml
+#       tags:
+#         - install-supabase-internal
+#       when: debpkg_mode or nixpkg_mode or stage2_nix
+
+#     - name: Internal tasks setup
+#       block:
+#         - name: Install supautils
+#           import_tasks: tasks/internal/supautils.yml
+#         - name: Setup postgresql-prestart
+#           import_tasks: tasks/internal/postgresql-prestart.yml
+#         - name: Setup admin-api
+#           import_tasks: tasks/internal/admin-api.yml
+#         - name: Install salt
+#           import_tasks: tasks/internal/install-salt.yml
+#         - name: Setup pg_egress_collect
+#           import_tasks: tasks/internal/pg_egress_collect.yml
+#         - name: Setup admin-mgr
+#           import_tasks: tasks/internal/admin-mgr.yml
+#         - name: Setup postgres-exporter
+#           import_tasks: tasks/internal/postgres-exporter.yml
+#         - name: Setup nftables
+#           import_tasks: tasks/internal/setup-nftables.yml
+#       when: debpkg_mode or nixpkg_mode or stage2_nix
+#       tags:
+#         - install-supabase-internal
+
+#     - name: install EC2 instance connect
+#       become: yes
+#       apt:
+#         pkg:
+#           - ec2-instance-connect
+#       tags:
+#         - aws-only
+
+#     - name: Install security tools
+#       become: yes
+#       apt:
+#         pkg:
+#           - unattended-upgrades
+#         update_cache: yes
+#         cache_valid_time: 3600
+
+#     - name: Clean out build dependencies
+#       import_tasks: tasks/clean-build-dependencies.yml
+
+#     - name: Ensure /run/postgresql exists for lock file creation
+#       become: yes
+#       file:
+#         path: /run/postgresql
+#         state: directory
+#         owner: postgres
+#         group: postgres
+#         mode: '2775'
+#       when: stage2_nix
+
+#     - name: Check if PostgreSQL is running
+#       become: yes
+#       become_user: postgres
+#       shell: /usr/lib/postgresql/bin/pg_ctl -D /var/lib/postgresql/data status
+#       args:
+#         executable: /bin/bash
+#       register: pg_status
+#       ignore_errors: yes
+#       when: stage2_nix
+
+#     - name: Force kill PostgreSQL process if running and remove stale PID file
+#       become: yes
+#       become_user: postgres
+#       shell: |
+#         if [ -f /var/lib/postgresql/data/postmaster.pid ]; then
+#           PID=$(head -n 1 /var/lib/postgresql/data/postmaster.pid)
+#           if ps -p $PID > /dev/null 2>&1; then
+#             echo "PostgreSQL process $PID is still running. Force killing..."
+#             kill -9 $PID
+#             sleep 2
+#           fi
+#           echo "Removing stale PID file"
+#           rm -f /var/lib/postgresql/data/postmaster.pid
+#         fi
+#       args:
+#         executable: /bin/bash
+#       when: stage2_nix
+
+#     - name: Ensure PostgreSQL is not running (double-check)
+#       become: yes
+#       become_user: postgres
+#       shell: /usr/lib/postgresql/bin/pg_ctl -D /var/lib/postgresql/data status
+#       args:
+#         executable: /bin/bash
+#       register: pg_status_after
+#       ignore_errors: yes
+#       when: stage2_nix
+
+#     - name: Fail if PostgreSQL is still running
+#       fail:
+#         msg: "PostgreSQL is still running after force kill; cannot start a new instance."
+#       when: stage2_nix and (pg_status_after.rc == 0)
+
+#     - name: Restart PostgreSQL without Systemd
+#       become: yes
+#       become_user: postgres
+#       ansible.builtin.shell: |
+#         export LANG=C
+#         export LANGUAGE=C
+#         export LC_ALL=C
+#         export LC_CTYPE=C
+#         export LOCALE_ARCHIVE=/usr/lib/locale/locale-archive
+#         . /var/lib/postgresql/.bashrc
+#         /usr/lib/postgresql/bin/pg_ctl -D /var/lib/postgresql/data start
+#       args:
+#         executable: /bin/bash
+#       when: stage2_nix
+
+#     - name: Setup Apache AGE extension
+#       become: yes
+#       become_user: postgres
+#       shell: |
+#         # Wait for PostgreSQL to be fully ready
+#         for i in {1..30}; do
+#           if psql -d postgres -c "SELECT 1;" > /dev/null 2>&1; then
+#             break
+#           fi
+#           sleep 1
+#         done
+        
+#         # Create AGE extension with error handling
+#         psql -d postgres -c "CREATE EXTENSION IF NOT EXISTS age CASCADE;" || {
+#           echo "Failed to create AGE extension, checking dependencies..."
+#           psql -d postgres -c "\dx"
+#           exit 1
+#         }
+        
+#         # Load AGE
+#         psql -d postgres -c "LOAD 'age';" || {
+#           echo "Failed to load AGE extension"
+#           exit 1
+#         }
+        
+#         # Set search path only if ag_catalog exists
+#         psql -d postgres -c "DO \$\$ 
+#         BEGIN 
+#           IF EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'ag_catalog') THEN 
+#             EXECUTE 'SET search_path = ag_catalog, \"\$user\", public'; 
+#             RAISE NOTICE 'AGE extension successfully configured';
+#           ELSE
+#             RAISE WARNING 'ag_catalog schema not found - AGE may not be properly installed';
+#           END IF; 
+#         END \$\$;"
+        
+#         # Verify AGE installation
+#         psql -d postgres -c "SELECT extname, extversion FROM pg_extension WHERE extname = 'age';"
+#       when: stage2_nix and postgresql_major_version == "15"
+#       register: age_setup
+#       changed_when: "'CREATE EXTENSION' in age_setup.stdout"
+#       failed_when: age_setup.rc != 0
+
+#     - name: Setup and add extensions
+#       import_tasks: tasks/setup-extensions.yml
+#       when: stage2_nix
+
+#     - name: Check if PostgreSQL PID file exists
+#       stat:
+#         path: /var/lib/postgresql/data/postmaster.pid
+#       register: pg_pid_file
+#       when: stage2_nix
+
+#     - name: Stop Postgres Database without Systemd (force shutdown)
+#       become: yes
+#       become_user: postgres
+#       shell: /usr/lib/postgresql/bin/pg_ctl -D /var/lib/postgresql/data stop -m immediate
+#       args:
+#         executable: /bin/bash
+#       when: stage2_nix and pg_pid_file.stat.exists
+
+#     - name: Run unit tests
+#       import_tasks: tasks/test-image.yml
+#       tags:
+#         - unit-tests
+#       when: debpkg_mode or stage2_nix
+
+#     - name: Collect Postgres binaries
+#       import_tasks: tasks/internal/collect-pg-binaries.yml
+#       tags:
+#         - collect-binaries
+#       when: debpkg_mode
+
+#     - name: Install osquery from nixpkgs binary cache
+#       become: yes
+#       shell: |
+#         sudo -u ubuntu bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile install github:nixos/nixpkgs/f98ec4f73c762223d62bee706726138cb6ea27cc#osquery"
+#       when: stage2_nix
+
+#     - name: Pre-check before osquery - Verify system state  
+#       shell: |
+#         echo "=== Final System State Check ==="
+#         echo "User details:"
+#         id pgbouncer
+#         echo "\nGroup memberships:"
+#         for group in postgres ssl-cert pgbouncer; do
+#           echo "$group:" $(getent group $group)
+#         done
+#       register: final_system_check
+
+#     - name: Display final system state
+#       debug:
+#         var: final_system_check.stdout_lines
+
+#     - name: Ensure pgbouncer has correct group memberships
+#       fail:
+#         msg: "pgbouncer user is missing required group memberships"
+#       when: >
+#         final_system_check.stdout is not search('postgres') or
+#         final_system_check.stdout is not search('ssl-cert') or
+#         final_system_check.stdout is not search('pgbouncer')
+
+#     - name: Run osquery permission checks
+#       become: yes
+#       shell: |
+#         sudo -u ubuntu bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && /usr/bin/python3 /tmp/ansible-playbook/ansible/files/permission_check.py"
+#       when: stage2_nix
+
+#     - name: Remove osquery
+#       become: yes
+#       shell: |
+#         sudo -u ubuntu bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile remove osquery"
+#       when: stage2_nix
+
+#     - name: nix collect garbage
+#       become: yes
+#       shell: |
+#         sudo -u ubuntu bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix-collect-garbage -d"
+#       when: stage2_nix
+
+# old 
+
+# - hosts: all
+#   become: yes
+#   gather_facts: yes  # Add this line
+
+#   pre_tasks:
+#     - import_tasks: tasks/setup-system.yml
+#   vars_files:
+#     - ./vars.yml
+
+#   vars:
+#     sql_files:
+#       - {
+#           source: "pgbouncer_config/pgbouncer_auth_schema.sql",
+#           dest: "00-schema.sql",
+#         }
+#       - { source: "stat_extension.sql", dest: "01-extension.sql" }
+    
+#   environment:
+#     PATH: /usr/lib/postgresql/bin:{{ ansible_env.PATH }}
+
+#   tasks:
+#     # New tasks to ensure git is installed and clone the repository
+#     - name: Ensure git is installed
+#       apt:
+#         name: git
+#         state: present
+
+#     # - name: Clone advaluepartners/postgres repo
+#     #   git:
+#     #     repo: 'https://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@github.com/advaluepartners/postgres.git'
+#     #     dest: /usr/local/src/advaluepartners-postgres
+#     #     version: main
+  
+#     - set_fact:
+#         supabase_internal: true
+#       tags:
+#         - install-supabase-internal
+
+#     - set_fact:
+#         parallel_jobs: 16
+#     - name: Set system state for user management
+#       block:
+#         - name: Ensure nscd is installed (if using glibc)
+#           apt:
+#             name: nscd
+#             state: present
+#           when: ansible_os_family == "Debian"
+#           ignore_errors: yes
+
+#         - name: Clear system user/group cache
+#           shell: |
+#             if command -v nscd >/dev/null 2>&1; then
+#               nscd -i group
+#               nscd -i passwd
+#             fi
+#             systemctl daemon-reload
+#           ignore_errors: yes
+
+#     - name: Install Postgres from source
+#       import_tasks: tasks/setup-postgres.yml
+
+
+#     - name: Install PgBouncer
+#       import_tasks: tasks/setup-pgbouncer.yml
+#       tags:
+#         - install-pgbouncer
+#         - install-supabase-internal
+#       when:  debpkg_mode or nixpkg_mode or stage2_nix
+
+#     - name: Install WAL-G
+#       import_tasks: tasks/setup-wal-g.yml
+#       when: debpkg_mode or nixpkg_mode or stage2_nix
+
+#     - name: Install Gotrue
+#       import_tasks: tasks/setup-gotrue.yml
+#       tags:
+#         - install-gotrue
+#         - install-supabase-internal
+#       when: debpkg_mode or nixpkg_mode or stage2_nix  # Add stage2_nix
+      
+#     - name: Install PostgREST
+#       import_tasks: tasks/setup-postgrest.yml
+#       vars:
+#         postgresql_major: "{{ postgresql_major_version }}"
+#       tags:
+#         - install-postgrest
+#         - install-supabase-internal
+#       when: debpkg_mode or nixpkg_mode or stage2_nix
+
+#     - name: Install Envoy
+#       import_tasks: tasks/setup-envoy.yml
+#       tags:
+#         - install-supabase-internal
+#       when: debpkg_mode or nixpkg_mode or stage2_nix  # Add stage2_nix
+
+#     - name: Install Kong
+#       import_tasks: tasks/setup-kong.yml
+#       tags:
+#         - install-supabase-internal
+#       when: debpkg_mode or nixpkg_mode or stage2_nix
+
+#     - name: Install nginx
+#       import_tasks: tasks/setup-nginx.yml
+#       tags:
+#         - install-supabase-internal
+#       when: debpkg_mode or nixpkg_mode or stage2_nix
+
+#     - name: Install Vector
+#       import_tasks: tasks/setup-vector.yml
+#       tags:
+#         - install-supabase-internal
+#       when: debpkg_mode or nixpkg_mode or stage2_nix
+
+#     - name: Install Supabase specific content
+#       import_tasks: tasks/setup-supabase-internal.yml
+#       tags:
+#         - install-supabase-internal
+#       when: debpkg_mode or nixpkg_mode  or stage2_nix
+
+
+#     - name: Fix IPv6 NDisc issues
+#       import_tasks: tasks/fix_ipv6_ndisc.yml
+#       tags:
+#         - install-supabase-internal
+#       when: debpkg_mode or nixpkg_mode
+
+#     - name: Start Postgres Database without Systemd
+#       become: yes
+#       become_user: postgres
+#       shell:
+#         cmd: /usr/lib/postgresql/bin/pg_ctl -D /var/lib/postgresql/data start
+#       when: debpkg_mode
+
+#     - name: Adjust APT update intervals
+#       copy:
+#         src: files/apt_periodic
+#         dest: /etc/apt/apt.conf.d/10periodic
+#       when: debpkg_mode or nixpkg_mode
+      
+#     - name: Transfer init SQL files
+#       copy:
+#         src: files/{{ item.source }}
+#         dest: /tmp/{{ item.dest }}
+#       loop: "{{ sql_files }}"
+#       when: debpkg_mode or stage2_nix
+
+#     - name: Create postgres role
+#       become: yes
+#       become_user: postgres
+#       shell:
+#         cmd: /usr/lib/postgresql/bin/psql --username=capitala_admin -d postgres -c "create role postgres superuser login; alter database postgres owner to postgres;"
+#       when: debpkg_mode or stage2_nix
+
+#     - name: Execute init SQL files
+#       become: yes
+#       become_user: postgres
+#       shell:
+#         cmd: /usr/lib/postgresql/bin/psql -f /tmp/{{ item.dest }}
+#       loop: "{{ sql_files }}"
+#       when: debpkg_mode or stage2_nix
+
+#     - name: Delete SQL scripts
+#       file:
+#         path: /tmp/{{ item.dest }}
+#         state: absent
+#       loop: "{{ sql_files }}"
+#       when: debpkg_mode or stage2_nix
+
+#     - name: First boot optimizations
+#       import_tasks: tasks/internal/optimizations.yml
+#       tags:
+#         - install-supabase-internal
+#       when: debpkg_mode or stage2_nix
+      
+#     - name: Finalize AMI
+#       import_tasks: tasks/finalize-ami.yml
+#       tags:
+#         - install-supabase-internal
+#       when: debpkg_mode or nixpkg_mode
+      
+#     - name: Enhance fail2ban
+#       import_tasks: tasks/setup-fail2ban.yml
+#       when: debpkg_mode or nixpkg_mode
+
+#     - name: Install Admin API
+#       import_tasks: tasks/internal/admin-api.yml
+#       tags:
+#         - install-supabase-internal
+#       when: debpkg_mode or nixpkg_mode or stage2_nix
+
+#     - name: Internal tasks setup
+#       block:
+#         - name: Install supautils
+#           import_tasks: tasks/internal/supautils.yml
+#         - name: Setup postgresql-prestart
+#           import_tasks: tasks/internal/postgresql-prestart.yml
+#         # - name: Setup optimizations
+#         #   import_tasks: tasks/internal/optimizations.yml
+#         - name: Setup admin-api
+#           import_tasks: tasks/internal/admin-api.yml
+#         - name: Install salt
+#           import_tasks: tasks/internal/install-salt.yml
+#         - name: Setup pg_egress_collect
+#           import_tasks: tasks/internal/pg_egress_collect.yml
+#         - name: Setup admin-mgr
+#           import_tasks: tasks/internal/admin-mgr.yml
+#         - name: Setup postgres-exporter
+#           import_tasks: tasks/internal/postgres-exporter.yml
+#         - name: Setup nftables
+#           import_tasks: tasks/internal/setup-nftables.yml
+#       when: debpkg_mode or nixpkg_mode or stage2_nix
+#       tags:
+#         - install-supabase-internal
+
+#     # Install EC2 instance connect
+#     # Only for AWS images
+#     - name: install EC2 instance connect
+#       become: yes
+#       apt:
+#         pkg:
+#           - ec2-instance-connect
+#       tags:
+#         - aws-only
+
+#     # Install this at the end to prevent it from kicking in during the apt process, causing conflicts
+#     - name: Install security tools
+#       become: yes
+#       apt:
+#         pkg:
+#           - unattended-upgrades
+#         update_cache: yes
+#         cache_valid_time: 3600
+
+#     - name: Clean out build dependencies
+#       import_tasks: tasks/clean-build-dependencies.yml
+
+#     - name: Ensure /run/postgresql exists for lock file creation
+#       become: yes
+#       file:
+#         path: /run/postgresql
+#         state: directory
+#         owner: postgres
+#         group: postgres
+#         mode: '2775'
+
+#       when: stage2_nix
+
+#     - name: Check if PostgreSQL is running
+#       become: yes
+#       become_user: postgres
+#       shell: /usr/lib/postgresql/bin/pg_ctl -D /var/lib/postgresql/data status
+#       args:
+#         executable: /bin/bash
+#       register: pg_status
+#       ignore_errors: yes
+#       when: stage2_nix
+
+#     - name: Force kill PostgreSQL process if running and remove stale PID file
+#       become: yes
+#       become_user: postgres
+#       shell: |
+#         if [ -f /var/lib/postgresql/data/postmaster.pid ]; then
+#           PID=$(head -n 1 /var/lib/postgresql/data/postmaster.pid)
+#           if ps -p $PID > /dev/null 2>&1; then
+#             echo "PostgreSQL process $PID is still running. Force killing..."
+#             kill -9 $PID
+#             # Give the OS a moment to reap the process
+#             sleep 2
+#           fi
+#           echo "Removing stale PID file"
+#           rm -f /var/lib/postgresql/data/postmaster.pid
+#         fi
+#       args:
+#         executable: /bin/bash
+#       when: stage2_nix
+
+#     - name: Ensure PostgreSQL is not running (double-check)
+#       become: yes
+#       become_user: postgres
+#       shell: /usr/lib/postgresql/bin/pg_ctl -D /var/lib/postgresql/data status
+#       args:
+#         executable: /bin/bash
+#       register: pg_status_after
+#       ignore_errors: yes
+#       when: stage2_nix
+
+#     - name: Fail if PostgreSQL is still running
+#       fail:
+#         msg: "PostgreSQL is still running after force kill; cannot start a new instance."
+#       when: stage2_nix and (pg_status_after.rc == 0)
+
+#     - name: Restart PostgreSQL without Systemd
+#       become: yes
+#       become_user: postgres
+#       ansible.builtin.shell: |
+#         # Export environment variables inline
+#         # export LANG=en_US.UTF-8
+#         # export LANGUAGE=en_US:en
+#         # export LC_ALL=en_US.UTF-8
+#         # export LC_CTYPE=en_US.UTF-8
+#         export LANG=C
+#         export LANGUAGE=C
+#         export LC_ALL=C
+#         export LC_CTYPE=C
+#         export LOCALE_ARCHIVE=/usr/lib/locale/locale-archive
+#         # Use the POSIX "." operator instead of "source"
+#         . /var/lib/postgresql/.bashrc
+#         /usr/lib/postgresql/bin/pg_ctl -D /var/lib/postgresql/data start
+#       args:
+#         executable: /bin/bash
+#       when: stage2_nix
+
+#     - name: Ensure AGE extension files are properly copied
+#       block:
+#         - name: Create AGE extension directories
+#           file:
+#             path: "{{ item }}"
+#             state: directory
+#             owner: postgres
+#             group: postgres
+#             mode: '0755'
+#           loop:
+#             - "/usr/lib/postgresql/lib"
+#             - "/usr/lib/postgresql/share/postgresql/extension"
+
+#         - name: Copy AGE shared library explicitly
+#           shell: |
+#             if [ -f "/var/lib/postgresql/.nix-profile/lib/age.so" ]; then
+#               cp -f "/var/lib/postgresql/.nix-profile/lib/age.so" "/usr/lib/postgresql/lib/"
+#               chmod 755 "/usr/lib/postgresql/lib/age.so"
+#               chown postgres:postgres "/usr/lib/postgresql/lib/age.so"
+#               echo "AGE library copied successfully"
+#             else
+#               echo "ERROR: AGE library not found in Nix profile"
+#               find /var/lib/postgresql/.nix-profile -name "age.so" 2>/dev/null || echo "No age.so found anywhere"
+#               exit 1
+#             fi
+#           register: age_lib_copy
+#           failed_when: age_lib_copy.rc != 0
+
+#         - name: Copy AGE control file explicitly  
+#           shell: |
+#             if [ -f "/var/lib/postgresql/.nix-profile/share/postgresql/extension/age.control" ]; then
+#               cp -f "/var/lib/postgresql/.nix-profile/share/postgresql/extension/age.control" "/usr/lib/postgresql/share/postgresql/extension/"
+#               chmod 644 "/usr/lib/postgresql/share/postgresql/extension/age.control"
+#               chown postgres:postgres "/usr/lib/postgresql/share/postgresql/extension/age.control"
+#               echo "AGE control file copied successfully"
+#             else
+#               echo "ERROR: AGE control file not found in Nix profile"
+#               find /var/lib/postgresql/.nix-profile -name "age.control" 2>/dev/null || echo "No age.control found anywhere"
+#               exit 1
+#             fi
+#           register: age_control_copy
+#           failed_when: age_control_copy.rc != 0
+
+#         - name: Copy AGE SQL files explicitly
+#           shell: |
+#             sql_files_found=0
+#             for sql_file in /var/lib/postgresql/.nix-profile/share/postgresql/extension/age*.sql; do
+#               if [ -f "$sql_file" ]; then
+#                 cp -f "$sql_file" "/usr/lib/postgresql/share/postgresql/extension/"
+#                 chmod 644 "/usr/lib/postgresql/share/postgresql/extension/$(basename "$sql_file")"
+#                 chown postgres:postgres "/usr/lib/postgresql/share/postgresql/extension/$(basename "$sql_file")"
+#                 echo "Copied $(basename "$sql_file")"
+#                 sql_files_found=$((sql_files_found + 1))
+#               fi
+#             done
+            
+#             if [ $sql_files_found -eq 0 ]; then
+#               echo "ERROR: No AGE SQL files found in Nix profile"
+#               find /var/lib/postgresql/.nix-profile -name "age*.sql" 2>/dev/null || echo "No age*.sql found anywhere"
+#               exit 1
+#             else
+#               echo "Successfully copied $sql_files_found AGE SQL files"
+#             fi
+#           register: age_sql_copy
+#           failed_when: age_sql_copy.rc != 0
+
+#         - name: Verify AGE extension files installation
+#           shell: |
+#             echo "=== AGE Extension Files Verification ==="
+#             echo "Library file:"
+#             ls -la /usr/lib/postgresql/lib/age.so
+#             echo "Control file:"
+#             ls -la /usr/lib/postgresql/share/postgresql/extension/age.control
+#             echo "SQL files:"
+#             ls -la /usr/lib/postgresql/share/postgresql/extension/age*.sql
+#             echo "Control file content:"
+#             cat /usr/lib/postgresql/share/postgresql/extension/age.control
+#           register: age_verification
+          
+#         - name: Display AGE verification results
+#           debug:
+#             var: age_verification.stdout_lines
+
+#       when: stage2_nix and postgresql_major_version == "15"
+#       become: yes
+
+#     - name: Setup Apache AGE extension (FIXED)
+#       become: yes
+#       become_user: postgres
+#       shell: |
+#         # Wait for PostgreSQL to be fully ready
+#         for i in {1..30}; do
+#           if psql -d postgres -c "SELECT 1;" > /dev/null 2>&1; then
+#             break
+#           fi
+#           sleep 1
+#         done
+        
+#         # Verify AGE files exist before trying to create extension
+#         echo "=== Verifying AGE extension files ==="
+#         if [ ! -f "/usr/lib/postgresql/lib/age.so" ]; then
+#           echo "ERROR: age.so not found"
+#           ls -la /usr/lib/postgresql/lib/ | grep age || echo "No AGE files in lib directory"
+#           exit 1
+#         fi
+        
+#         if [ ! -f "/usr/lib/postgresql/share/postgresql/extension/age.control" ]; then
+#           echo "ERROR: age.control not found"
+#           ls -la /usr/lib/postgresql/share/postgresql/extension/ | grep age || echo "No AGE files in extension directory"  
+#           exit 1
+#         fi
+        
+#         echo "AGE files verified successfully"
+#         echo "Control file content:"
+#         cat /usr/lib/postgresql/share/postgresql/extension/age.control
+        
+#         # Create AGE extension with detailed error handling
+#         echo "Creating AGE extension..."
+#         if ! psql -d postgres -c "CREATE EXTENSION IF NOT EXISTS age CASCADE;"; then
+#           echo "Failed to create AGE extension, checking available extensions..."
+#           psql -d postgres -c "SELECT name FROM pg_available_extensions WHERE name LIKE '%age%';"
+#           psql -d postgres -c "\dx"
+#           echo "Checking extension directory contents:"
+#           ls -la /usr/lib/postgresql/share/postgresql/extension/ | grep age
+#           exit 1
+#         fi
+        
+#         # Load AGE
+#         if ! psql -d postgres -c "LOAD 'age';"; then
+#           echo "Failed to load AGE extension"
+#           exit 1
+#         fi
+        
+#         # Set search path only if ag_catalog exists
+#         psql -d postgres -c "DO \$\$ 
+#         BEGIN 
+#           IF EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'ag_catalog') THEN 
+#             EXECUTE 'SET search_path = ag_catalog, \"\$user\", public'; 
+#             RAISE NOTICE 'AGE extension successfully configured';
+#           ELSE
+#             RAISE WARNING 'ag_catalog schema not found - AGE may not be properly installed';
+#           END IF; 
+#         END \$\$;"
+        
+#         # Verify AGE installation
+#         psql -d postgres -c "SELECT extname, extversion FROM pg_extension WHERE extname = 'age';"
+#       when: stage2_nix and postgresql_major_version == "15"
+#       register: age_setup_fixed
+#       changed_when: "'CREATE EXTENSION' in age_setup_fixed.stdout"
+#       failed_when: age_setup_fixed.rc != 0
+        
+#         # Be careful, if already created, this won't show.
+#         # Maybe check for 'LOAD' or 'SET' in stdout too, or ignore changed_when for this.
+
+#     - name: Setup and add extensions
+#       import_tasks: tasks/setup-extensions.yml
+#       when: stage2_nix
+
+#     - name: Check if PostgreSQL PID file exists
+#       stat:
+#         path: /var/lib/postgresql/data/postmaster.pid
+#       register: pg_pid_file
+#       when: stage2_nix
+
+#     - name: Stop Postgres Database without Systemd (force shutdown)
+#       become: yes
+#       become_user: postgres
+#       shell: /usr/lib/postgresql/bin/pg_ctl -D /var/lib/postgresql/data stop -m immediate
+#       args:
+#         executable: /bin/bash
+#       when: stage2_nix and pg_pid_file.stat.exists
+
+#     - name: Run unit tests
+#       import_tasks: tasks/test-image.yml
+#       tags:
+#         - unit-tests
+#       when: debpkg_mode or stage2_nix
+
+#     - name: Collect Postgres binaries
+#       import_tasks: tasks/internal/collect-pg-binaries.yml
+#       tags:
+#         - collect-binaries
+#       when: debpkg_mode
+
+#     - name: Install osquery from nixpkgs binary cache
+#       become: yes
+#       shell: |
+#         sudo -u ubuntu bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile install github:nixos/nixpkgs/f98ec4f73c762223d62bee706726138cb6ea27cc#osquery"
+#       when: stage2_nix
+
+#     - name: Pre-check before osquery - Verify system state  
+#       shell: |
+#         echo "=== Final System State Check ==="
+#         echo "User details:"
+#         id pgbouncer
+#         echo "\nGroup memberships:"
+#         for group in postgres ssl-cert pgbouncer; do
+#           echo "$group:" $(getent group $group)
+#         done
+#       register: final_system_check
+
+#     - name: Display final system state
+#       debug:
+#         var: final_system_check.stdout_lines
+
+#     - name: Ensure pgbouncer has correct group memberships
+#       fail:
+#         msg: "pgbouncer user is missing required group memberships"
+#       when: >
+#         final_system_check.stdout is not search('postgres') or
+#         final_system_check.stdout is not search('ssl-cert') or
+#         final_system_check.stdout is not search('pgbouncer')
+
+#     - name: Display final system state
+#       debug:
+#         var: final_system_check.stdout_lines
+
+#     - name: Ensure pgbouncer has correct group memberships
+#       fail:
+#         msg: "pgbouncer user is missing required group memberships"
+#       when: >
+#         final_system_check.stdout is not search('postgres') or
+#         final_system_check.stdout is not search('ssl-cert') or
+#         final_system_check.stdout is not search('pgbouncer')
+
+#     - name: Run osquery permission checks
+#       become: yes
+#       shell: |
+#         sudo -u ubuntu bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && /usr/bin/python3 /tmp/ansible-playbook/ansible/files/permission_check.py"
+#       when: stage2_nix
+
+#     - name: Remove osquery
+#       become: yes
+#       shell: |
+#         sudo -u ubuntu bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile remove osquery"
+#       when: stage2_nix
+
+#     - name: nix collect garbage
+#       become: yes
+#       shell: |
+#         sudo -u ubuntu bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix-collect-garbage -d"
+#       when: stage2_nix
