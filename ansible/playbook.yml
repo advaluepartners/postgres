@@ -296,70 +296,148 @@
         executable: /bin/bash
       when: stage2_nix
 
-    - name: Setup Apache AGE extension (FIXED)
+    - name: Setup Apache AGE extension (PRODUCTION FIX)
       become: yes
       become_user: postgres
       shell: |
+        echo "=== AGE Extension Setup Started ==="
+        
         # Wait for PostgreSQL to be fully ready
+        echo "Waiting for PostgreSQL to be ready..."
         for i in {1..30}; do
           if psql -d postgres -c "SELECT 1;" > /dev/null 2>&1; then
+            echo "PostgreSQL is ready after $i attempts"
             break
           fi
-          sleep 1
+          echo "Attempt $i: PostgreSQL not ready, waiting..."
+          sleep 2
+          if [ $i -eq 30 ]; then
+            echo "ERROR: PostgreSQL failed to become ready after 30 attempts"
+            exit 1
+          fi
         done
         
         # Verify AGE files exist before trying to create extension
         echo "=== Verifying AGE extension files ==="
-        if [ ! -f "/usr/lib/postgresql/lib/age.so" ]; then
-          echo "ERROR: age.so not found"
-          ls -la /usr/lib/postgresql/lib/ | grep age || echo "No AGE files in lib directory"
+        
+        REQUIRED_FILES=(
+          "/usr/lib/postgresql/lib/age.so"
+          "/usr/lib/postgresql/share/postgresql/extension/age.control"
+          "/usr/lib/postgresql/share/postgresql/extension/age--1.5.0.sql"
+        )
+        
+        for file in "${REQUIRED_FILES[@]}"; do
+          if [ ! -f "$file" ]; then
+            echo "ERROR: Required file missing: $file"
+            echo "Available AGE files:"
+            ls -la /usr/lib/postgresql/share/postgresql/extension/age* 2>/dev/null || echo "No AGE extension files found"
+            ls -la /usr/lib/postgresql/lib/age* 2>/dev/null || echo "No AGE library found"
+            
+            # Check if files are still in Nix store but not copied
+            echo "Files still in Nix store:"
+            find /nix/store -name "age--1.5.0.sql" || echo "Main script not in Nix store either"
+            find /nix/store -name "age.control" || echo "Control file not in Nix store either"
+            
+            exit 1
+          else
+            echo "✓ Found: $file"
+          fi
+        done
+        
+        # Critical verification: check main installation script content
+        SCRIPT_SIZE=$(wc -l < "/usr/lib/postgresql/share/postgresql/extension/age--1.5.0.sql")
+        if [ "$SCRIPT_SIZE" -lt 100 ]; then
+          echo "ERROR: Main installation script too small ($SCRIPT_SIZE lines)"
+          echo "This indicates the AGE build process failed to generate the proper script"
+          echo "Expected: concatenated content from 16 SQL files (should be several hundred lines)"
+          head -20 /usr/lib/postgresql/share/postgresql/extension/age--1.5.0.sql
           exit 1
         fi
         
-        if [ ! -f "/usr/lib/postgresql/share/postgresql/extension/age.control" ]; then
-          echo "ERROR: age.control not found"
-          ls -la /usr/lib/postgresql/share/postgresql/extension/ | grep age || echo "No AGE files in extension directory"  
-          exit 1
-        fi
+        echo "✓ Main installation script has $SCRIPT_SIZE lines (proper size)"
+        echo "All required AGE files verified successfully"
         
-        echo "AGE files verified successfully"
-        echo "Control file content:"
+        # Display control file content for debugging
+        echo "=== AGE Control File Content ==="
         cat /usr/lib/postgresql/share/postgresql/extension/age.control
         
+        # Check available extensions before creation
+        echo "=== Checking available extensions ==="
+        psql -d postgres -c "SELECT name, default_version, installed_version FROM pg_available_extensions WHERE name LIKE '%age%';"
+        
         # Create AGE extension with detailed error handling
-        echo "Creating AGE extension..."
-        if ! psql -d postgres -c "CREATE EXTENSION IF NOT EXISTS age CASCADE;"; then
-          echo "Failed to create AGE extension, checking available extensions..."
+        echo "=== Creating AGE extension ==="
+        if psql -d postgres -c "CREATE EXTENSION IF NOT EXISTS age CASCADE;" 2>&1; then
+          echo "SUCCESS: AGE extension created successfully"
+        else
+          echo "ERROR: Failed to create AGE extension"
+          echo "Checking PostgreSQL logs for errors..."
+          tail -20 /var/lib/postgresql/data/log/postgresql*.log 2>/dev/null || echo "No PostgreSQL logs found"
+          echo "Checking available extensions again..."
           psql -d postgres -c "SELECT name FROM pg_available_extensions WHERE name LIKE '%age%';"
+          echo "Checking installed extensions..."
           psql -d postgres -c "\dx"
-          echo "Checking extension directory contents:"
-          ls -la /usr/lib/postgresql/share/postgresql/extension/ | grep age
           exit 1
         fi
         
-        # Load AGE
-        if ! psql -d postgres -c "LOAD 'age';"; then
-          echo "Failed to load AGE extension"
+        # Load AGE library
+        echo "=== Loading AGE library ==="
+        if psql -d postgres -c "LOAD 'age';" 2>&1; then
+          echo "SUCCESS: AGE library loaded successfully"
+        else
+          echo "ERROR: Failed to load AGE library"
           exit 1
         fi
         
-        # Set search path only if ag_catalog exists
+        # Verify ag_catalog schema exists and set search path
+        echo "=== Configuring AGE search path ==="
         psql -d postgres -c "DO \$\$ 
         BEGIN 
           IF EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'ag_catalog') THEN 
             EXECUTE 'SET search_path = ag_catalog, \"\$user\", public'; 
-            RAISE NOTICE 'AGE extension successfully configured';
+            RAISE NOTICE 'AGE extension successfully configured with ag_catalog schema';
           ELSE
-            RAISE WARNING 'ag_catalog schema not found - AGE may not be properly installed';
+            RAISE WARNING 'ag_catalog schema not found - this may indicate AGE installation issues';
           END IF; 
-        END \$\$;"
+        END \$\$;" 2>&1
         
-        # Verify AGE installation
-        psql -d postgres -c "SELECT extname, extversion FROM pg_extension WHERE extname = 'age';"
+        # Final verification of AGE installation
+        echo "=== Final AGE Installation Verification ==="
+        
+        # Check extension is installed
+        EXT_CHECK=$(psql -d postgres -t -c "SELECT extname, extversion FROM pg_extension WHERE extname = 'age';")
+        if [ -n "$EXT_CHECK" ]; then
+          echo "SUCCESS: AGE extension is installed: $EXT_CHECK"
+        else
+          echo "ERROR: AGE extension not found in pg_extension"
+          psql -d postgres -c "\dx"
+          exit 1
+        fi
+        
+        # Check ag_catalog schema exists
+        SCHEMA_CHECK=$(psql -d postgres -t -c "SELECT nspname FROM pg_namespace WHERE nspname = 'ag_catalog';")
+        if [ -n "$SCHEMA_CHECK" ]; then
+          echo "SUCCESS: ag_catalog schema exists"
+        else
+          echo "WARNING: ag_catalog schema not found"
+        fi
+        
+        # Test basic AGE functionality
+        echo "=== Testing basic AGE functionality ==="
+        if psql -d postgres -c "SELECT ag_catalog.create_graph('test_graph');" 2>&1; then
+          echo "SUCCESS: AGE basic functionality test passed"
+          # Clean up test graph
+          psql -d postgres -c "SELECT ag_catalog.drop_graph('test_graph', true);" 2>/dev/null || true
+        else
+          echo "WARNING: AGE basic functionality test failed, but extension is installed"
+        fi
+        
+        echo "=== AGE Extension Setup Completed Successfully ==="
+        
       when: stage2_nix and postgresql_major_version == "15"
-      register: age_setup_fixed
-      changed_when: "'CREATE EXTENSION' in age_setup_fixed.stdout"
-      failed_when: age_setup_fixed.rc != 0
+      register: age_setup_production
+      changed_when: "'CREATE EXTENSION' in age_setup_production.stdout"
+      failed_when: age_setup_production.rc != 0
 
     - name: Setup and add extensions
       import_tasks: tasks/setup-extensions.yml
