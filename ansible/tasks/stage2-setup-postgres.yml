@@ -748,7 +748,7 @@
     line: 'GRN_PLUGINS_DIR=/var/lib/postgresql/.nix-profile/lib/groonga/plugins'
   become: yes
 
-# ===== FIXED AGE EXTENSION INSTALLATION =====  
+# ===== FIXED AGE EXTENSION INSTALLATION =====
 - name: Ensure AGE extension is properly installed for PostgreSQL 15
   block:
     - name: Create AGE extension directories with proper permissions
@@ -845,36 +845,47 @@
       shell: |
         echo "=== AGE Installation Verification ==="
         
-        # Check for required files
-        REQUIRED_FILES=(
-          "/usr/lib/postgresql/lib/age.so"
-          "/usr/lib/postgresql/share/postgresql/extension/age.control"
-          "/usr/lib/postgresql/share/postgresql/extension/age--1.5.0.sql"
-        )
-        
+        # Check for required files (using sh-compatible syntax)
         all_found=true
-        for file in "${REQUIRED_FILES[@]}"; do
-          if [ -f "$file" ]; then
-            echo "✓ Found: $file"
-            ls -la "$file"
-          else
-            echo "✗ Missing: $file"
-            all_found=false
-          fi
-        done
+        
+        # Check each file individually (sh-compatible)
+        if [ -f "/usr/lib/postgresql/lib/age.so" ]; then
+          echo "✓ Found: /usr/lib/postgresql/lib/age.so"
+          ls -la "/usr/lib/postgresql/lib/age.so"
+        else
+          echo "✗ Missing: /usr/lib/postgresql/lib/age.so"
+          all_found=false
+        fi
+        
+        if [ -f "/usr/lib/postgresql/share/postgresql/extension/age.control" ]; then
+          echo "✓ Found: /usr/lib/postgresql/share/postgresql/extension/age.control"
+          ls -la "/usr/lib/postgresql/share/postgresql/extension/age.control"
+        else
+          echo "✗ Missing: /usr/lib/postgresql/share/postgresql/extension/age.control"
+          all_found=false
+        fi
+        
+        if [ -f "/usr/lib/postgresql/share/postgresql/extension/age--1.5.0.sql" ]; then
+          echo "✓ Found: /usr/lib/postgresql/share/postgresql/extension/age--1.5.0.sql"
+          ls -la "/usr/lib/postgresql/share/postgresql/extension/age--1.5.0.sql"
+        else
+          echo "✗ Missing: /usr/lib/postgresql/share/postgresql/extension/age--1.5.0.sql"
+          all_found=false
+        fi
         
         if [ "$all_found" = true ]; then
           echo "SUCCESS: All required AGE files are present"
           
           # Critical check: verify main installation script has proper content
-          SCRIPT_SIZE=$(wc -l < "/usr/lib/postgresql/share/postgresql/extension/age--1.5.0.sql")
-          if [ "$SCRIPT_SIZE" -lt 100 ]; then
-            echo "ERROR: Main installation script too small ($SCRIPT_SIZE lines)"
-            echo "This indicates the script was not properly generated"
-            exit 1
+          if [ -f "/usr/lib/postgresql/share/postgresql/extension/age--1.5.0.sql" ]; then
+            SCRIPT_SIZE=$(wc -l < "/usr/lib/postgresql/share/postgresql/extension/age--1.5.0.sql")
+            if [ "$SCRIPT_SIZE" -lt 100 ]; then
+              echo "ERROR: Main installation script too small ($SCRIPT_SIZE lines)"
+              echo "This indicates the script was not properly generated"
+              exit 1
+            fi
+            echo "✓ Main installation script has $SCRIPT_SIZE lines (expected >100)"
           fi
-          
-          echo "✓ Main installation script has $SCRIPT_SIZE lines (expected >100)"
           
           # Display control file content
           echo "=== AGE Control File Content ==="
@@ -896,6 +907,8 @@
           echo "ERROR: AGE installation incomplete"
           exit 1
         fi
+      args:
+        executable: /bin/bash
       register: age_verification
       failed_when: age_verification.rc != 0
 
