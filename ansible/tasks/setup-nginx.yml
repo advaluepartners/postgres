@@ -1,52 +1,137 @@
-# Replace the failing nginx startup tasks with these:
+- name: nginx - system user
+  user: name=nginx
 
-- name: Nginx - create service file
+# Kong installation steps from http://archive.vn/3HRQx
+- name: nginx - system dependencies
+  apt:
+    pkg:
+      - openssl
+      - libpcre3-dev
+      - libssl-dev
+      - zlib1g-dev
+
+- name: nginx - download source
+  get_url:
+    url: "https://nginx.org/download/nginx-{{ nginx_release }}.tar.gz"
+    dest: /tmp/nginx-{{ nginx_release }}.tar.gz
+    checksum: "{{ nginx_release_checksum }}"
+
+- name: nginx - unpack archive
+  unarchive:
+    remote_src: yes
+    src: /tmp/nginx-{{ nginx_release }}.tar.gz
+    dest: /tmp
+
+- name: nginx - configure
+  shell:
+    chdir: /tmp/nginx-{{ nginx_release }}
+    cmd: |
+      set -e
+
+      ./configure \
+      --prefix=/usr/local/nginx \
+      --conf-path=/etc/nginx/nginx.conf \
+      --with-http_ssl_module \
+      --with-http_realip_module \
+      --with-threads
+  become: yes
+
+- name: nginx - build
+  community.general.make:
+    target: build
+    chdir: /tmp/nginx-{{ nginx_release }}
+    jobs: "{{ parallel_jobs | default(omit) }}"
+  become: yes
+
+- name: nginx - install
+  make:
+    chdir: /tmp/nginx-{{ nginx_release }}
+    target: install
+  become: yes
+
+- name: nginx - hand over ownership of /usr/local/nginx to user nginx
+  file:
+    path: /usr/local/nginx
+    recurse: yes
+    owner: nginx
+
+- name: nginx - hand over ownership of /etc/nginx to user nginx
+  file:
+    path: /etc/nginx
+    recurse: yes
+    owner: nginx
+
+# [warn] ulimit is currently set to "1024". For better performance set it to at least
+# "4096" using "ulimit -n"
+- name: nginx - bump up ulimit
+  pam_limits:
+    limit_item: nofile
+    limit_type: soft
+    domain: nginx
+    value: "4096"
+
+- name: nginx - create service file
   template:
     src: files/nginx.service.j2
     dest: /etc/systemd/system/nginx.service
-    owner: root
-    group: root
-    mode: '0644'
-  when: stage2_nix
 
-# Before reloading systemd, add this to kill any existing nginx instances:
-- name: Stop any running nginx processes not managed by systemd
-  shell: |
-    # Try graceful shutdown first
-    if [ -x /usr/local/nginx/sbin/nginx ]; then
-      /usr/local/nginx/sbin/nginx -s stop || true
-    fi
-    # Make sure all nginx processes are stopped
-    pkill nginx || true
-    # Wait a moment to ensure ports are freed
-    sleep 2
-  ignore_errors: yes
-  when: stage2_nix
+# Keep it dormant for the timebeing
 
-- name: Nginx - reload systemd
-  systemd:
-    daemon_reload: yes
-  when: stage2_nix
+# - name: nginx - reload systemd
+#   systemd:
+#     daemon_reload: yes
 
-# FIXED: Enable but don't start nginx during AMI build
-- name: Nginx - enable service for future startup
-  systemd:
-    name: nginx
-    enabled: yes
-    daemon_reload: yes
-  when: stage2_nix
-  # Remove the 'state: started' to avoid starting during build
 
-- name: Nginx - verify service file is created
-  stat:
-    path: /etc/systemd/system/nginx.service
-  register: nginx_service_file
-  when: stage2_nix
 
-- name: Display nginx service status
-  debug:
-    msg: "Nginx service file created: {{ nginx_service_file.stat.exists }}, enabled for boot but not started during AMI build"
-  when: stage2_nix
+# # Replace the failing nginx startup tasks with these:
+
+# - name: Nginx - create service file
+#   template:
+#     src: files/nginx.service.j2
+#     dest: /etc/systemd/system/nginx.service
+#     owner: root
+#     group: root
+#     mode: '0644'
+#   when: stage2_nix
+
+# # Before reloading systemd, add this to kill any existing nginx instances:
+# - name: Stop any running nginx processes not managed by systemd
+#   shell: |
+#     # Try graceful shutdown first
+#     if [ -x /usr/local/nginx/sbin/nginx ]; then
+#       /usr/local/nginx/sbin/nginx -s stop || true
+#     fi
+#     # Make sure all nginx processes are stopped
+#     pkill nginx || true
+#     # Wait a moment to ensure ports are freed
+#     sleep 2
+#   ignore_errors: yes
+#   when: stage2_nix
+
+# - name: Nginx - reload systemd
+#   systemd:
+#     daemon_reload: yes
+#   when: stage2_nix
+
+# # FIXED: Enable but don't start nginx during AMI build
+# - name: Nginx - enable service for future startup
+#   systemd:
+#     name: nginx
+#     enabled: yes
+#     daemon_reload: yes
+#   when: stage2_nix
+#   # Remove the 'state: started' to avoid starting during build
+
+# - name: Nginx - verify service file is created
+#   stat:
+#     path: /etc/systemd/system/nginx.service
+#   register: nginx_service_file
+#   when: stage2_nix
+
+# - name: Display nginx service status
+#   debug:
+#     msg: "Nginx service file created: {{ nginx_service_file.stat.exists }}, enabled for boot but not started during AMI build"
+#   when: stage2_nix
 
 # Remove or comment out these verification tasks that try to check running nginx:
 # - name: Verify nginx service is running correctly
