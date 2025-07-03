@@ -12,7 +12,7 @@ User=postgres
 Group=postgres
 Environment="LANG=C"
 Environment="LC_ALL=C"
-ExecStart=/usr/lib/postgresql/bin/postgres -D /etc/postgresql
+ExecStart=/var/lib/postgresql/.nix-profile/bin/postgres -D /var/lib/postgresql/data
 ExecStartPre=+/usr/local/bin/postgres_prestart.sh
 ExecReload=/bin/kill -HUP $MAINPID
 KillMode=mixed

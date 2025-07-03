@@ -586,3 +586,17 @@
       shell: |
         sudo -u ubuntu bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix-collect-garbage -d"
       when: stage2_nix
+
+    - name: FINAL VERIFICATION - Check for pg_ctl after all cleanup
+      become: yes
+      shell: |
+        echo "=== Verifying final existence of pg_ctl ==="
+        find / -name pg_ctl 2>/dev/null
+        echo "=== Verifying symlink in /usr/lib/postgresql/bin ==="
+        ls -la /usr/lib/postgresql/bin/pg_ctl
+      register: final_verification_check
+      ignore_errors: true
+
+    - name: FINAL VERIFICATION - Display results
+      debug:
+        var: final_verification_check.stdout_lines
