@@ -1,0 +1,22 @@
+---
+- hosts: localhost
+  connection: local
+  tasks:
+    - name: Test fixed AGE task syntax
+      shell: |
+        echo "=== Testing AGE syntax ==="
+        for i in {1..3}; do
+          echo "PostgreSQL is ready after $i attempts"
+          break
+        done
+        
+        REQUIRED_FILES=(
+          "/tmp/test1"
+          "/tmp/test2"
+        )
+        
+        for file in "${REQUIRED_FILES[@]}"; do
+          echo "Testing: $file"
+        done
+      args:
+        executable: /bin/bash

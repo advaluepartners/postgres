@@ -1,11 +1,5 @@
 The below represents the folders and files from the root paths:
-- /Users/barneycook/Desktop/code/ProjectRef/postgres/amazon-arm64-nix.pkr.hcl
-- /Users/barneycook/Desktop/code/ProjectRef/postgres/ansible/playbook.yml
-- /Users/barneycook/Desktop/code/ProjectRef/postgres/ansible/tasks/stage2-setup-postgres.yml
-- /Users/barneycook/Desktop/code/ProjectRef/postgres/flake.nix
-- /Users/barneycook/Desktop/code/ProjectRef/postgres/nix/ext/age.nix
-- /Users/barneycook/Desktop/code/ProjectRef/postgres/scripts/nix-provision.sh
-- /Users/barneycook/Desktop/code/ProjectRef/postgres/stage2-nix-psql.pkr.hcl
+/Users/barneycook/Desktop/code/ProjectRef/postgres/amazon-arm64-nix.pkr.hcl /Users/barneycook/Desktop/code/ProjectRef/postgres/ansible/playbook.yml /Users/barneycook/Desktop/code/ProjectRef/postgres/ansible/tasks/stage2-setup-postgres.yml /Users/barneycook/Desktop/code/ProjectRef/postgres/flake.nix /Users/barneycook/Desktop/code/ProjectRef/postgres/stage2-nix-psql.pkr.hcl /Users/barneycook/Desktop/code/ProjectRef/postgres/ansible/tasks/test-image.yml
 
 Each file is separated by '''--- followed by the file path and ending with ---.
 File content begins immediately after its path and extends until the next '''---
