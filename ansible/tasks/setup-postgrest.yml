@@ -1,22 +1,10 @@
+# /ansible/tasks/setup-postgrest.yml
+
 - name: PostgREST - create group
   group:
     name: postgrest
     state: present
     system: yes
-  when: stage2_nix
-
-# - name: PostgREST - system user
-#   user: name=postgrest
-
-- name: PostgREST - add Postgres PPA gpg key
-  apt_key:
-    url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
-    state: present
-
-- name: PostgREST - add Postgres PPA
-  apt_repository:
-    repo: "deb http://apt.postgresql.org/pub/repos/apt/ focal-pgdg main"
-    state: present
   when: stage2_nix
 
 - name: PostgREST - system user
@@ -28,31 +16,17 @@
     create_home: no
   when: stage2_nix
 
-- name: PostgREST - update apt cache
-  apt:
-    update_cache: yes
-  when: stage2_nix
-
-# libpq is a C library that enables user programs to communicate with
-# the PostgreSQL database server.
-
+# PostgREST system dependencies.
+# The repository and key are now managed centrally in install-salt.yml
+# to ensure they persist for the entire build.
 - name: PostgREST - system dependencies
   apt:
     pkg:
       - libpq5
       - libnuma-dev
+    state: present
+    update_cache: yes # Run an update just before installing these specific packages
   when: stage2_nix
-
-
-- name: PostgREST - remove Postgres PPA gpg key
-  apt_key:
-    url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
-    state: absent
-
-- name: PostgREST - remove Postgres PPA
-  apt_repository:
-    repo: "deb http://apt.postgresql.org/pub/repos/apt/ focal-pgdg {{ postgresql_major }}"
-    state: absent
 
 - name: postgis - ensure dependencies do not get autoremoved
   shell: |
@@ -74,7 +48,7 @@
     url: "https://github.com/PostgREST/postgrest/releases/download/v{{ postgrest_release }}/postgrest-v{{ postgrest_release }}-linux-static-x64.tar.xz"
     dest: /tmp/postgrest.tar.xz
     checksum: "{{ postgrest_x86_release_checksum }}"
-    timeout: 60    
+    timeout: 60
   when: platform == "amd64"
 
 - name: PostgREST - unpack archive in /opt
@@ -128,3 +102,135 @@
 - name: PostgREST - reload systemd
   systemd:
     daemon_reload: yes
+
+
+# - name: PostgREST - create group
+#   group:
+#     name: postgrest
+#     state: present
+#     system: yes
+#   when: stage2_nix
+
+# # - name: PostgREST - system user
+# #   user: name=postgrest
+
+# - name: PostgREST - add Postgres PPA gpg key
+#   apt_key:
+#     url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+#     state: present
+
+# - name: PostgREST - add Postgres PPA
+#   apt_repository:
+#     repo: "deb http://apt.postgresql.org/pub/repos/apt/ focal-pgdg main"
+#     state: present
+#   when: stage2_nix
+
+# - name: PostgREST - system user
+#   user:
+#     name: postgrest
+#     system: yes
+#     group: postgrest
+#     shell: /bin/false
+#     create_home: no
+#   when: stage2_nix
+
+# - name: PostgREST - update apt cache
+#   apt:
+#     update_cache: yes
+#   when: stage2_nix
+
+# # libpq is a C library that enables user programs to communicate with
+# # the PostgreSQL database server.
+
+# - name: PostgREST - system dependencies
+#   apt:
+#     pkg:
+#       - libpq5
+#       - libnuma-dev
+#   when: stage2_nix
+
+
+# - name: PostgREST - remove Postgres PPA gpg key
+#   apt_key:
+#     url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+#     state: absent
+
+# - name: PostgREST - remove Postgres PPA
+#   apt_repository:
+#     repo: "deb http://apt.postgresql.org/pub/repos/apt/ focal-pgdg {{ postgresql_major }}"
+#     state: absent
+
+# - name: postgis - ensure dependencies do not get autoremoved
+#   shell: |
+#     set -e
+#     apt-mark manual libpq5*
+#     apt-mark manual libnuma*
+#     apt-mark auto libnuma*-dev
+
+# - name: PostgREST - download ubuntu binary archive (arm)
+#   get_url:
+#     url: "https://github.com/PostgREST/postgrest/releases/download/v{{ postgrest_release }}/postgrest-v{{ postgrest_release }}-ubuntu-aarch64.tar.xz"
+#     dest: /tmp/postgrest.tar.xz
+#     checksum: "{{ postgrest_arm_release_checksum }}"
+#     timeout: 60
+#   when: platform == "arm64"
+
+# - name: PostgREST - download ubuntu binary archive (x86)
+#   get_url:
+#     url: "https://github.com/PostgREST/postgrest/releases/download/v{{ postgrest_release }}/postgrest-v{{ postgrest_release }}-linux-static-x64.tar.xz"
+#     dest: /tmp/postgrest.tar.xz
+#     checksum: "{{ postgrest_x86_release_checksum }}"
+#     timeout: 60    
+#   when: platform == "amd64"
+
+# - name: PostgREST - unpack archive in /opt
+#   unarchive:
+#     remote_src: yes
+#     src: /tmp/postgrest.tar.xz
+#     dest: /opt
+#     owner: postgrest
+#     mode: '0755'
+
+# - name: create directories
+#   file:
+#     state: directory
+#     owner: postgrest
+#     group: postgrest
+#     mode: '0775'
+#     path: /etc/postgrest
+
+# - name: empty files
+#   file:
+#     state: touch
+#     owner: postgrest
+#     group: postgrest
+#     path: /etc/postgrest/{{ item }}
+#   with_items:
+#     - base.conf
+#     - generated.conf
+
+# - name: create conf merging script
+#   copy:
+#     content: |
+#       #! /usr/bin/env bash
+#       set -euo pipefail
+#       set -x
+
+#       cd "$(dirname "$0")"
+#       cat $@ > merged.conf
+#     dest: /etc/postgrest/merge.sh
+#     mode: 0750
+#     owner: postgrest
+#     group: postgrest
+
+# - name: PostgREST - create service files
+#   template:
+#     src: files/{{ item }}.j2
+#     dest: /etc/systemd/system/{{ item }}
+#   with_items:
+#     - postgrest.service
+#     - postgrest-optimizations.service
+
+# - name: PostgREST - reload systemd
+#   systemd:
+#     daemon_reload: yes

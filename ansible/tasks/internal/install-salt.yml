@@ -1,3 +1,59 @@
+# /ansible/tasks/internal/install-salt.yml
+
+- name: Debug platform variable
+  debug:
+    var: platform
+  when: platform is defined
+
+- name: Ensure /etc/apt/keyrings directory exists
+  file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+
+- name: Add Salt GPG key
+  ansible.builtin.get_url:
+    url: "https://packages.broadcom.com/artifactory/api/security/keypair/SaltProjectKey/public"
+    dest: /etc/apt/keyrings/salt-archive-keyring-2023.pgp
+    mode: '0644'
+
+- name: Add PostgreSQL GPG key
+  ansible.builtin.get_url:
+    url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+    dest: /etc/apt/keyrings/postgresql.asc
+    mode: '0644'
+
+- name: Add Salt APT repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/salt-archive-keyring-2023.pgp arch={{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}] https://packages.broadcom.com/artifactory/saltproject-deb stable main"
+    filename: 'salt'
+    state: present
+    update_cache: no
+
+- name: Add PostgreSQL APT repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/postgresql.asc] http://apt.postgresql.org/pub/repos/apt focal-pgdg main"
+    filename: postgresql
+    state: present
+    update_cache: no
+
+- name: Update APT cache after adding all repos
+  apt:
+    update_cache: yes
+  register: apt_update_result
+  failed_when: apt_update_result.rc != 0
+  changed_when: apt_update_result.rc == 0
+
+- name: Install Salt minion
+  apt:
+    name: salt-minion
+    state: present
+    update_cache: no # Cache was just updated
+
+
+
+
+
 # - name: Add apt repository for Saltstack (arm)
 #   block:
 #     - name: Ensure /etc/apt/keyrings directory exists
@@ -68,74 +124,76 @@
 #     state: present
 #     update_cache: no  # Cache already updated
 
-- name: Debug platform variable
-  debug:
-    var: platform
-  when: platform is defined
+#################Below is what i was using up until 050725
 
-- name: Add apt repository for Saltstack (arm)
-  block:
-    - name: Ensure /etc/apt/keyrings directory exists
-      file:
-        path: /etc/apt/keyrings
-        state: directory
-        mode: '0755'
+# - name: Debug platform variable
+#   debug:
+#     var: platform
+#   when: platform is defined
 
-    - name: salt gpg key
-      ansible.builtin.get_url:
-        url: "https://packages.broadcom.com/artifactory/api/security/keypair/SaltProjectKey/public"
-        dest: "/etc/apt/keyrings/salt-archive-keyring-2023.pgp"
-        mode: '0644'
+# - name: Add apt repository for Saltstack (arm)
+#   block:
+#     - name: Ensure /etc/apt/keyrings directory exists
+#       file:
+#         path: /etc/apt/keyrings
+#         state: directory
+#         mode: '0755'
 
-    - name: salt apt repo
-      ansible.builtin.apt_repository:
-        repo: "deb [signed-by=/etc/apt/keyrings/salt-archive-keyring-2023.pgp arch=arm64] https://packages.broadcom.com/artifactory/saltproject-deb stable main"
-        filename: 'salt'
-        state: present
-        update_cache: no
-  when: ansible_architecture == 'aarch64'
+#     - name: salt gpg key
+#       ansible.builtin.get_url:
+#         url: "https://packages.broadcom.com/artifactory/api/security/keypair/SaltProjectKey/public"
+#         dest: "/etc/apt/keyrings/salt-archive-keyring-2023.pgp"
+#         mode: '0644'
 
-- name: Add apt repository for Saltstack (amd)
-  block:
-    - name: Ensure /etc/apt/keyrings directory exists
-      file:
-        path: /etc/apt/keyrings
-        state: directory
-        mode: '0755'
+#     - name: salt apt repo
+#       ansible.builtin.apt_repository:
+#         repo: "deb [signed-by=/etc/apt/keyrings/salt-archive-keyring-2023.pgp arch=arm64] https://packages.broadcom.com/artifactory/saltproject-deb stable main"
+#         filename: 'salt'
+#         state: present
+#         update_cache: no
+#   when: ansible_architecture == 'aarch64'
 
-    - name: salt gpg key
-      ansible.builtin.get_url:
-        url: "https://packages.broadcom.com/artifactory/api/security/keypair/SaltProjectKey/public"
-        dest: "/etc/apt/keyrings/salt-archive-keyring-2023.pgp"
-        mode: '0644'
+# - name: Add apt repository for Saltstack (amd)
+#   block:
+#     - name: Ensure /etc/apt/keyrings directory exists
+#       file:
+#         path: /etc/apt/keyrings
+#         state: directory
+#         mode: '0755'
 
-    - name: salt apt repo
-      ansible.builtin.apt_repository:
-        repo: "deb [signed-by=/etc/apt/keyrings/salt-archive-keyring-2023.pgp arch=amd64] https://packages.broadcom.com/artifactory/saltproject-deb stable main"
-        filename: 'salt'
-        state: present
-        update_cache: no
-  when: ansible_architecture == 'x86_64'
+#     - name: salt gpg key
+#       ansible.builtin.get_url:
+#         url: "https://packages.broadcom.com/artifactory/api/security/keypair/SaltProjectKey/public"
+#         dest: "/etc/apt/keyrings/salt-archive-keyring-2023.pgp"
+#         mode: '0644'
 
-- name: Update APT cache with detailed output
-  ansible.builtin.command: apt-get update
-  register: apt_update_output
-  ignore_errors: yes
-  changed_when: false
+#     - name: salt apt repo
+#       ansible.builtin.apt_repository:
+#         repo: "deb [signed-by=/etc/apt/keyrings/salt-archive-keyring-2023.pgp arch=amd64] https://packages.broadcom.com/artifactory/saltproject-deb stable main"
+#         filename: 'salt'
+#         state: present
+#         update_cache: no
+#   when: ansible_architecture == 'x86_64'
 
-- name: Debug APT update output
-  debug:
-    msg: |
-      stdout: {{ apt_update_output.stdout | default('No stdout') }}
-      stderr: {{ apt_update_output.stderr | default('No stderr') }}
+# - name: Update APT cache with detailed output
+#   ansible.builtin.command: apt-get update
+#   register: apt_update_output
+#   ignore_errors: yes
+#   changed_when: false
 
-- name: Fail if APT update failed
-  fail:
-    msg: "APT update failed: {{ apt_update_output.stderr | default('No stderr available') }}"
-  when: apt_update_output.rc != 0
+# - name: Debug APT update output
+#   debug:
+#     msg: |
+#       stdout: {{ apt_update_output.stdout | default('No stdout') }}
+#       stderr: {{ apt_update_output.stderr | default('No stderr') }}
 
-- name: Install Salt minion
-  apt:
-    name: salt-minion
-    state: present
-    update_cache: no
+# - name: Fail if APT update failed
+#   fail:
+#     msg: "APT update failed: {{ apt_update_output.stderr | default('No stderr available') }}"
+#   when: apt_update_output.rc != 0
+
+# - name: Install Salt minion
+#   apt:
+#     name: salt-minion
+#     state: present
+#     update_cache: no

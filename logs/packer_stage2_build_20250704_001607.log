@@ -9992,3 +9992,6 @@ SUCCESS: AMI created successfully
 === Stage 2 build completed ===
 Build script exiting with code: 0
 barneycook@Mac postgres % 
+
+# Run this on the new EC2 instance as root or ubuntu
+sudo -u postgres /bin/bash -l -c "/usr/lib/postgresql/bin/pg_ctl -D /data/pgdata -l /var/log/postgresql/startup.log start"
