@@ -581,11 +581,11 @@
         sudo -u ubuntu bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix profile remove osquery"
       when: stage2_nix
 
-    - name: nix collect garbage
-      become: yes
-      shell: |
-        sudo -u ubuntu bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix-collect-garbage -d"
-      when: stage2_nix
+    # - name: nix collect garbage
+    #   become: yes
+    #   shell: |
+    #     sudo -u ubuntu bash -c ". /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh && nix-collect-garbage -d"
+    #   when: stage2_nix
 
     - name: FINAL VERIFICATION - Check for pg_ctl after all cleanup
       become: yes
