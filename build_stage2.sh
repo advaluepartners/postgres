@@ -73,6 +73,14 @@ fi
 echo "=== Initializing Packer plugins ==="
 packer init stage2-nix-psql.pkr.hcl
 
+# CRITICAL FIX: Verify the fixed Packer configuration
+echo "=== Verifying Packer configuration includes fstab fix ==="
+if ! grep -q "fstab" stage2-nix-psql.pkr.hcl; then
+    echo "ERROR: Packer configuration missing fstab fix"
+    echo "Please update stage2-nix-psql.pkr.hcl with the fixed volume mounting code"
+    exit 1
+fi
+
 # Validate packer configuration
 echo "=== Validating Packer configuration ==="
 if ! packer validate \
@@ -147,13 +155,47 @@ echo "Log file available at: $LOG_FILE"
 # Verify the AMI was created
 AMI_NAME="capitala-project-ami-15.8"
 echo "=== Verifying AMI creation ==="
-if aws ec2 describe-images \
+if AMI_ID=$(aws ec2 describe-images \
     --region "$TARGET_REGION" \
     --owners self \
     --filters "Name=name,Values=$AMI_NAME" \
     --query 'Images[0].{ImageId:ImageId,State:State,Name:Name}' \
-    --output table; then
+    --output table); then
     echo "SUCCESS: AMI created successfully"
+    echo "$AMI_ID"
+    
+    # CRITICAL FIX: Test the AMI by launching a test instance
+    echo "=== Testing AMI with temporary instance ==="
+    TEMP_INSTANCE_ID=$(aws ec2 run-instances \
+        --region "$TARGET_REGION" \
+        --image-id $(aws ec2 describe-images --region "$TARGET_REGION" --owners self --filters "Name=name,Values=$AMI_NAME" --query 'Images[0].ImageId' --output text) \
+        --instance-type t3.medium \
+        --key-name "your-key-name" \
+        --security-group-ids "sg-xxxxxxxxx" \
+        --subnet-id "subnet-xxxxxxxxx" \
+        --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=AMI-Test-Instance}]' \
+        --query 'Instances[0].InstanceId' \
+        --output text)
+    
+    echo "Launched test instance: $TEMP_INSTANCE_ID"
+    echo "Waiting 3 minutes for instance to start..."
+    sleep 180
+    
+    # Get instance IP
+    INSTANCE_IP=$(aws ec2 describe-instances \
+        --region "$TARGET_REGION" \
+        --instance-ids "$TEMP_INSTANCE_ID" \
+        --query 'Reservations[0].Instances[0].PublicIpAddress' \
+        --output text)
+    
+    echo "Instance IP: $INSTANCE_IP"
+    echo "To test the AMI manually:"
+    echo "ssh ubuntu@$INSTANCE_IP"
+    echo "sudo systemctl status postgresql"
+    echo "sudo -u postgres psql -c 'SELECT version();'"
+    echo ""
+    echo "Remember to terminate the test instance: aws ec2 terminate-instances --region $TARGET_REGION --instance-ids $TEMP_INSTANCE_ID"
+    
 else
     echo "WARNING: Could not verify AMI creation"
 fi

@@ -2,18 +2,26 @@
 Description=PostgreSQL database server
 Documentation=man:postgres(1)
 {% if supabase_internal is defined %}
-Requires=database-optimizations.service
-After=database-optimizations.service
+Requires=database-optimizations.service nix-daemon.service
+After=database-optimizations.service nix-daemon.service
+{% else %}
+Requires=nix-daemon.service
+After=nix-daemon.service
 {% endif %}
 
 [Service]
 Type=notify
 User=postgres
 Group=postgres
+# CRITICAL FIX: Ensure Nix environment is available
 Environment="LANG=C"
 Environment="LC_ALL=C"
+Environment="NIX_REMOTE=daemon"
+Environment="PATH=/nix/var/nix/profiles/default/bin:/var/lib/postgresql/.nix-profile/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 ExecStart=/var/lib/postgresql/.nix-profile/bin/postgres -D /var/lib/postgresql/data
 ExecStartPre=+/usr/local/bin/postgres_prestart.sh
+# CRITICAL FIX: Add prestart check for Nix environment
+ExecStartPre=+/bin/bash -c 'test -f /var/lib/postgresql/.nix-profile/bin/postgres || { echo "ERROR: PostgreSQL binary not found in Nix profile"; exit 1; }'
 ExecReload=/bin/kill -HUP $MAINPID
 KillMode=mixed
 KillSignal=SIGINT

@@ -1,9 +1,10 @@
 # /ansible/tasks/internal/install-salt.yml
+# This task is now the central point for managing all external APT repositories for the build.
 
 - name: Debug platform variable
   debug:
-    var: platform
-  when: platform is defined
+    var: ansible_architecture
+  when: ansible_architecture is defined
 
 - name: Ensure /etc/apt/keyrings directory exists
   file:
@@ -11,16 +12,11 @@
     state: directory
     mode: '0755'
 
+# --- Section for Saltstack ---
 - name: Add Salt GPG key
   ansible.builtin.get_url:
     url: "https://packages.broadcom.com/artifactory/api/security/keypair/SaltProjectKey/public"
     dest: /etc/apt/keyrings/salt-archive-keyring-2023.pgp
-    mode: '0644'
-
-- name: Add PostgreSQL GPG key
-  ansible.builtin.get_url:
-    url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
-    dest: /etc/apt/keyrings/postgresql.asc
     mode: '0644'
 
 - name: Add Salt APT repository
@@ -30,25 +26,32 @@
     state: present
     update_cache: no
 
+# --- Section for PostgreSQL ---
+- name: Add PostgreSQL GPG key
+  ansible.builtin.get_url:
+    url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+    dest: /etc/apt/keyrings/postgresql.asc
+    mode: '0644'
+
 - name: Add PostgreSQL APT repository
   ansible.builtin.apt_repository:
     repo: "deb [signed-by=/etc/apt/keyrings/postgresql.asc] http://apt.postgresql.org/pub/repos/apt focal-pgdg main"
-    filename: postgresql
+    filename: 'postgresql'
     state: present
     update_cache: no
 
+# --- Final Update and Install ---
 - name: Update APT cache after adding all repos
   apt:
     update_cache: yes
-  register: apt_update_result
-  failed_when: apt_update_result.rc != 0
-  changed_when: apt_update_result.rc == 0
+  # REMOVED incorrect 'failed_when' and 'changed_when'.
+  # The 'apt' module handles its own failure state correctly.
 
 - name: Install Salt minion
   apt:
     name: salt-minion
     state: present
-    update_cache: no # Cache was just updated
+    update_cache: no # Cache was just updated in the previous task
 
 
 

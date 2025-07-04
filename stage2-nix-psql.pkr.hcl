@@ -142,6 +142,12 @@ build {
       "sudo chmod 1775 /nix/store",
       "echo '60GB volume mounted at /nix (includes store)'",
       "df -h | grep nvme",
+      # CRITICAL FIX: Add fstab entry for persistent mounting
+      "echo '=== Adding persistent fstab entry for Nix volume ==='",
+      "NIX_UUID=$(sudo blkid -s UUID -o value /dev/nvme2n1)",
+      "echo \"UUID=$NIX_UUID /nix ext4 defaults,discard 0 2\" | sudo tee -a /etc/fstab",
+      "echo 'Fstab entry added:'",
+      "tail -1 /etc/fstab",
       # Test filesystem operations
       "echo 'test' | sudo tee /tmp/test-file",
       "sudo mkdir -p /nix/test-temp-dir",

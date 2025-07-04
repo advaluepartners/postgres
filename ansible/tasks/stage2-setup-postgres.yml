@@ -124,6 +124,92 @@
   delay: 5
   until: install_postgres.rc == 0
 
+# Add this task to ansible/tasks/stage2-setup-postgres.yml after Nix installation
+- name: Setup Nix daemon service for system-wide access
+  block:
+    - name: Create nix-daemon systemd service
+      copy:
+        dest: /etc/systemd/system/nix-daemon.service
+        content: |
+          [Unit]
+          Description=Nix daemon service
+          After=network.target
+
+          [Service]
+          Type=forking
+          ExecStart=/nix/var/nix/daemon-package/bin/nix-daemon --daemon
+          KillMode=process
+          LimitNOFILE=1048576
+
+          [Install]
+          WantedBy=multi-user.target
+        owner: root
+        group: root
+        mode: '0644'
+      become: yes
+
+    - name: Create nix-daemon socket service
+      copy:
+        dest: /etc/systemd/system/nix-daemon.socket
+        content: |
+          [Unit]
+          Description=Nix daemon socket
+
+          [Socket]
+          ListenStream=/nix/var/nix/daemon-socket/socket
+
+          [Install]
+          WantedBy=sockets.target
+        owner: root
+        group: root
+        mode: '0644'
+      become: yes
+
+    - name: Enable and start nix-daemon services
+      systemd:
+        name: "{{ item }}"
+        enabled: yes
+        daemon_reload: yes
+      loop:
+        - nix-daemon.service
+        - nix-daemon.socket
+      become: yes
+
+    - name: Create Nix configuration directory
+      file:
+        path: /etc/nix
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      become: yes
+
+    - name: Configure Nix for multi-user mode
+      copy:
+        dest: /etc/nix/nix.conf
+        content: |
+          build-users-group = nixbld
+          experimental-features = nix-command flakes
+          trusted-users = root postgres
+        owner: root
+        group: root
+        mode: '0644'
+      become: yes
+
+    - name: Add Nix environment to system profile
+      copy:
+        dest: /etc/profile.d/nix-daemon.sh
+        content: |
+          if [ -e '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh' ]; then
+            . '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh'
+          fi
+        owner: root
+        group: root
+        mode: '0644'
+      become: yes
+
+  when: stage2_nix
+
 - name: Debug Nix profile contents
   become: yes
   shell: |
